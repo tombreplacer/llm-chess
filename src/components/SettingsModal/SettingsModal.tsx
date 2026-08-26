@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import type { GrandmasterStyle, LMStudioModel, PlayerConfig } from '../../types/chess';
+import React, { useState, useEffect } from 'react';
+import type { GrandmasterStyle, LMStudioModel, PlayerConfig, TtsConfig } from '../../types/chess';
 import { GRANDMASTER_PRESETS } from '../../services/prompts';
 import { lmStudioService } from '../../services/lmStudioClient';
-import { Settings, Server, RefreshCw, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { speechService } from '../../services/speechService';
+import { Settings, Server, RefreshCw, CheckCircle2, AlertCircle, X, Volume2, VolumeX, Play } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,6 +20,8 @@ interface SettingsModalProps {
   onUpdatePostMoveDelay: (delay: number) => void;
   availableModels: LMStudioModel[];
   onSetAvailableModels: (models: LMStudioModel[]) => void;
+  ttsConfig: TtsConfig;
+  onUpdateTtsConfig: (config: TtsConfig) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -35,12 +38,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   postMoveDelaySec,
   onUpdatePostMoveDelay,
   availableModels,
-  onSetAvailableModels
+  onSetAvailableModels,
+  ttsConfig,
+  onUpdateTtsConfig
 }) => {
   const [urlInput, setUrlInput] = useState(lmStudioBaseUrl);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const voices = speechService.getVoices();
+      setAvailableVoices(voices);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -65,27 +78,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
       setConnectionStatus('error');
-      setStatusMessage(msg);
+      const msg = err instanceof Error ? err.message : String(err);
+      setStatusMessage(msg || 'Не удалось подключиться. Проверьте LM Studio.');
     } finally {
       setIsLoadingModels(false);
     }
   };
 
-  const grandmasterKeys = Object.keys(GRANDMASTER_PRESETS) as GrandmasterStyle[];
+  const handleTestTts = () => {
+    speechService.speak(
+      'Лошадью хожу, блядь, век воли не видать! Проверка связи.',
+      ttsConfig,
+      'nikolaich'
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-950/50">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        {/* Modal Header */}
+        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+            <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
               <Settings className="w-5 h-5" />
             </div>
             <div>
               <h2 className="font-bold text-white text-lg">Настройки LM Studio и Гроссмейстеров</h2>
-              <p className="text-xs text-slate-400">Конфигурация нейросетей, промптов и параметров генерации</p>
+              <p className="text-xs text-slate-400">Конфигурация нейросетей, промптов, пауз и озвучки TTS</p>
             </div>
           </div>
           <button
@@ -97,6 +117,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          {/* Сервер LM Studio */}
           <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-3">
             <div className="flex items-center gap-2 text-white font-semibold text-sm">
               <Server className="w-4 h-4 text-cyan-400" />
@@ -139,42 +160,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
 
+          {/* Игрок 1 (Белые) */}
           <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-slate-100 shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
-                <h3 className="font-bold text-white text-sm">Белые (White Player)</h3>
+                <span className="w-3 h-3 rounded-full bg-slate-100 border border-slate-300 shadow" />
+                <span className="font-bold text-white text-sm">Игрок за Белых</span>
               </div>
-              <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
-                <button
-                  onClick={() => onUpdateWhiteConfig({ ...whiteConfig, type: 'human' })}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                    whiteConfig.type === 'human' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Человек
-                </button>
-                <button
-                  onClick={() => onUpdateWhiteConfig({ ...whiteConfig, type: 'llm' })}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                    whiteConfig.type === 'llm' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Нейросеть (LLM)
-                </button>
-              </div>
+              <span className="text-xs text-slate-400 font-mono">
+                {whiteConfig.type === 'human' ? 'Человек' : 'Нейросеть (LLM)'}
+              </span>
             </div>
 
             {whiteConfig.type === 'llm' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="text-slate-400 block mb-1">Модель в LM Studio:</label>
+                  <label className="block text-slate-400 mb-1">Модель LM Studio:</label>
                   <select
                     value={whiteConfig.modelId}
                     onChange={e => onUpdateWhiteConfig({ ...whiteConfig, modelId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono"
                   >
-                    <option value="mock-ai">🎭 Mock AI (Встроенная демо-модель)</option>
+                    <option value="mock-ai">⚡ Встроенный Демо-ИИ (без сервера)</option>
                     {availableModels.map(m => (
                       <option key={m.id} value={m.id}>
                         {m.id}
@@ -184,28 +191,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-slate-400 block mb-1">Гроссмейстерский стиль:</label>
+                  <label className="block text-slate-400 mb-1">Стиль гроссмейстера:</label>
                   <select
                     value={whiteConfig.style}
-                    onChange={e =>
-                      onUpdateWhiteConfig({ ...whiteConfig, style: e.target.value as GrandmasterStyle })
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none focus:border-cyan-500"
+                    onChange={e => {
+                      const style = e.target.value as GrandmasterStyle;
+                      const preset = GRANDMASTER_PRESETS[style];
+                      onUpdateWhiteConfig({
+                        ...whiteConfig,
+                        style,
+                        name: preset.name,
+                        temperature: preset.temperature
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
                   >
-                    {grandmasterKeys.map(key => {
-                      const p = GRANDMASTER_PRESETS[key];
-                      return (
-                        <option key={key} value={key}>
-                          {p.avatar} {p.name} ({p.title.split('—')[0]})
-                        </option>
-                      );
-                    })}
+                    {Object.values(GRANDMASTER_PRESETS).map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.avatar} {p.name} ({p.title.split('—')[0]})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div className="col-span-full">
                   <div className="flex justify-between text-slate-400 mb-1">
-                    <span>Температура рассуждений (Креативность/Точность):</span>
+                    <span>Температура рассуждений:</span>
                     <span className="font-mono text-white font-bold">{whiteConfig.temperature}</span>
                   </div>
                   <input
@@ -224,42 +235,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
 
+          {/* Игрок 2 (Черные) */}
           <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-slate-950 border border-slate-600 shadow-[0_0_8px_rgba(0,0,0,0.8)]" />
-                <h3 className="font-bold text-white text-sm">Черные (Black Player)</h3>
+                <span className="w-3 h-3 rounded-full bg-slate-950 border border-slate-700 shadow" />
+                <span className="font-bold text-white text-sm">Игрок за Черных</span>
               </div>
-              <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
-                <button
-                  onClick={() => onUpdateBlackConfig({ ...blackConfig, type: 'human' })}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                    blackConfig.type === 'human' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Человек
-                </button>
-                <button
-                  onClick={() => onUpdateBlackConfig({ ...blackConfig, type: 'llm' })}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                    blackConfig.type === 'llm' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Нейросеть (LLM)
-                </button>
-              </div>
+              <span className="text-xs text-slate-400 font-mono">
+                {blackConfig.type === 'human' ? 'Человек' : 'Нейросеть (LLM)'}
+              </span>
             </div>
 
             {blackConfig.type === 'llm' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="text-slate-400 block mb-1">Модель в LM Studio:</label>
+                  <label className="block text-slate-400 mb-1">Модель LM Studio:</label>
                   <select
                     value={blackConfig.modelId}
                     onChange={e => onUpdateBlackConfig({ ...blackConfig, modelId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono"
                   >
-                    <option value="mock-ai">🎭 Mock AI (Встроенная демо-модель)</option>
+                    <option value="mock-ai">⚡ Встроенный Демо-ИИ (без сервера)</option>
                     {availableModels.map(m => (
                       <option key={m.id} value={m.id}>
                         {m.id}
@@ -269,22 +266,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-slate-400 block mb-1">Гроссмейстерский стиль:</label>
+                  <label className="block text-slate-400 mb-1">Стиль гроссмейстера:</label>
                   <select
                     value={blackConfig.style}
-                    onChange={e =>
-                      onUpdateBlackConfig({ ...blackConfig, style: e.target.value as GrandmasterStyle })
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none focus:border-cyan-500"
+                    onChange={e => {
+                      const style = e.target.value as GrandmasterStyle;
+                      const preset = GRANDMASTER_PRESETS[style];
+                      onUpdateBlackConfig({
+                        ...blackConfig,
+                        style,
+                        name: preset.name,
+                        temperature: preset.temperature
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
                   >
-                    {grandmasterKeys.map(key => {
-                      const p = GRANDMASTER_PRESETS[key];
-                      return (
-                        <option key={key} value={key}>
-                          {p.avatar} {p.name} ({p.title.split('—')[0]})
-                        </option>
-                      );
-                    })}
+                    {Object.values(GRANDMASTER_PRESETS).map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.avatar} {p.name} ({p.title.split('—')[0]})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -309,6 +310,124 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
 
+          {/* Секция: Озвучка реплик (TTS) */}
+          <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {ttsConfig.enabled ? (
+                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <VolumeX className="w-4 h-4 text-slate-500" />
+                )}
+                <div>
+                  <span className="text-white font-semibold text-sm block">Озвучка реплик (Web Speech TTS)</span>
+                  <span className="text-slate-400 text-xs">
+                    Гроссмейстеры зачитывают свои реплики и трэшток вслух
+                  </span>
+                </div>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ttsConfig.enabled}
+                  onChange={e => onUpdateTtsConfig({ ...ttsConfig, enabled: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            {ttsConfig.enabled && (
+              <div className="space-y-3 pt-2 border-t border-slate-700/50 text-xs">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-slate-300 font-medium">Системный голос:</label>
+                    <button
+                      type="button"
+                      onClick={handleTestTts}
+                      className="px-2.5 py-1 bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/40 rounded-lg flex items-center gap-1 font-semibold transition-colors"
+                    >
+                      <Play className="w-3 h-3" />
+                      <span>Тест голоса</span>
+                    </button>
+                  </div>
+                  <select
+                    value={ttsConfig.voiceURI}
+                    onChange={e => onUpdateTtsConfig({ ...ttsConfig, voiceURI: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                  >
+                    <option value="">Автовыбор (Рекомендуемый русский/системный)</option>
+                    {availableVoices.map(v => (
+                      <option key={v.voiceURI} value={v.voiceURI}>
+                        {v.name} ({v.lang})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-1">
+                      <span>Скорость (Rate):</span>
+                      <span className="font-mono text-white font-bold">{ttsConfig.rate}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.05"
+                      value={ttsConfig.rate}
+                      onChange={e =>
+                        onUpdateTtsConfig({ ...ttsConfig, rate: parseFloat(e.target.value) })
+                      }
+                      className="w-full accent-cyan-500 cursor-pointer"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-1">
+                      <span>Тон (Pitch):</span>
+                      <span className="font-mono text-white font-bold">{ttsConfig.pitch}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="1.5"
+                      step="0.05"
+                      value={ttsConfig.pitch}
+                      onChange={e =>
+                        onUpdateTtsConfig({ ...ttsConfig, pitch: parseFloat(e.target.value) })
+                      }
+                      className="w-full accent-cyan-500 cursor-pointer"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-slate-400 mb-1">
+                      <span>Громкость:</span>
+                      <span className="font-mono text-white font-bold">
+                        {Math.round(ttsConfig.volume * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={ttsConfig.volume}
+                      onChange={e =>
+                        onUpdateTtsConfig({ ...ttsConfig, volume: parseFloat(e.target.value) })
+                      }
+                      className="w-full accent-cyan-500 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Пауза после хода */}
           <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 flex items-center justify-between text-xs">
             <div>
               <span className="text-white font-semibold block">Пауза после хода LLM (для анализа мыслей):</span>
@@ -332,6 +451,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </select>
           </div>
 
+          {/* Лимит ретраев */}
           <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 flex items-center justify-between text-xs">
             <div>
               <span className="text-white font-semibold block">Лимит повторных попыток (Retry Limit):</span>

@@ -42,6 +42,14 @@ export interface PlayerConfig {
   systemPromptCustom?: string;
 }
 
+export interface TtsConfig {
+  enabled: boolean;
+  voiceURI: string;
+  rate: number;
+  pitch: number;
+  volume: number;
+}
+
 export interface RetryLog {
   attempt: number;
   rawResponse: string;

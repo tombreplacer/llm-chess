@@ -10,11 +10,13 @@ import type {
   LMStudioModel,
   MoveThought,
   PieceColor,
-  PlayerConfig
+  PlayerConfig,
+  TtsConfig
 } from './types/chess';
 import { ChessEngineService } from './services/chessEngine';
 import { chessJudge } from './services/chessJudge';
 import { lmStudioService } from './services/lmStudioClient';
+import { speechService } from './services/speechService';
 import { GRANDMASTER_PRESETS } from './services/prompts';
 import { sounds } from './services/soundEffects';
 
@@ -87,6 +89,14 @@ export const App: React.FC = () => {
     maxTokens: 2048
   });
 
+  const [ttsConfig, setTtsConfig] = useState<TtsConfig>(() => initialSettings?.ttsConfig || {
+    enabled: true,
+    voiceURI: '',
+    rate: 1.0,
+    pitch: 1.0,
+    volume: 1.0
+  });
+
   // Автосохранение всех настроек в localStorage
   useEffect(() => {
     try {
@@ -97,11 +107,12 @@ export const App: React.FC = () => {
         maxRetries,
         postMoveDelaySec,
         whiteConfig,
-        blackConfig
+        blackConfig,
+        ttsConfig
       };
       localStorage.setItem('llm_chess_arena_settings_v1', JSON.stringify(toSave));
     } catch {}
-  }, [gameMode, boardOrientation, lmStudioBaseUrl, maxRetries, postMoveDelaySec, whiteConfig, blackConfig]);
+  }, [gameMode, boardOrientation, lmStudioBaseUrl, maxRetries, postMoveDelaySec, whiteConfig, blackConfig, ttsConfig]);
 
   const [moveThoughts, setMoveThoughts] = useState<MoveThought[]>([]);
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number | null>(null);
@@ -224,6 +235,11 @@ export const App: React.FC = () => {
             isStreaming: false,
             isThinking: false
           }));
+
+          // Озвучиваем реплику гроссмейстера через браузерный TTS
+          if (result.thought.comment) {
+            speechService.speak(result.thought.comment, ttsConfig, playerConfig.style);
+          }
 
           const isOver = engineRef.current.isGameOver();
 
@@ -606,6 +622,8 @@ export const App: React.FC = () => {
         onUpdatePostMoveDelay={setPostMoveDelaySec}
         availableModels={availableModels}
         onSetAvailableModels={setAvailableModels}
+        ttsConfig={ttsConfig}
+        onUpdateTtsConfig={setTtsConfig}
       />
 
       {/* Модалка завершения партии */}
