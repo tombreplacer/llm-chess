@@ -18,6 +18,7 @@ interface ThinkingSpoilerProps {
   isInspectingPause?: boolean;
   inspectCountdown?: number | null;
   onSkipPause?: () => void;
+  totalPlayerErrors?: number;
 }
 
 export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
@@ -35,7 +36,8 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
   onRetry,
   isInspectingPause = false,
   inspectCountdown = null,
-  onSkipPause
+  onSkipPause,
+  totalPlayerErrors
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(true);
   const streamEndRef = useRef<HTMLDivElement>(null);
@@ -83,6 +85,18 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
               <span className={isWhiteColor ? 'badge-color-white' : 'badge-color-black'}>
                 {colorName}
               </span>
+              {totalPlayerErrors !== undefined && (
+                <span
+                  title={`Всего нелегальных попыток/ошибок у игрока за партию: ${totalPlayerErrors}`}
+                  className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                    totalPlayerErrors > 0
+                      ? 'bg-rose-950/80 border border-rose-700 text-rose-300'
+                      : 'bg-slate-800/60 border border-slate-700/60 text-slate-400'
+                  }`}
+                >
+                  {totalPlayerErrors > 0 ? `⚠️ ${totalPlayerErrors} ${totalPlayerErrors === 1 ? 'ошибка' : 'ошибок'}` : '0 ошибок'}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 font-mono">
               {isLive ? (statusText || 'Ожидание...') : `Ход #${savedThought?.turnNumber || 1} • ${savedThought?.san}`}
@@ -111,9 +125,19 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
           )}
 
           {currentAttempt > 1 && isLive && !isInspectingPause && (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-500/50 text-amber-400 text-xs font-semibold">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Попытка {currentAttempt}</span>
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-950/80 border border-rose-600 text-rose-300 text-xs font-semibold animate-pulse">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              <span>Попытка {currentAttempt} (Нелегальный ход)</span>
+            </div>
+          )}
+
+          {savedThought && savedThought.retries.length > 0 && (
+            <div
+              title={`Ход был сделан после ${savedThought.retries.length} нелегальных попыток`}
+              className="flex items-center gap-1 text-[11px] text-rose-300 font-mono bg-rose-950/80 px-2 py-0.5 rounded-lg border border-rose-800"
+            >
+              <AlertTriangle className="w-3 h-3 text-rose-400" />
+              <span>{savedThought.retries.length} {savedThought.retries.length === 1 ? 'ошибка' : 'ошибки'}</span>
             </div>
           )}
 

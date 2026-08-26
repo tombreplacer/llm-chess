@@ -141,11 +141,21 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
                       }`}
                     >
                       <MoveLabel move={pair.white} />
-                      {pair.white.thoughtText && (
-                        <span title="Есть мысли ИИ" className="inline-flex opacity-80 hover:opacity-100 ml-1">
-                          <Brain className="w-3 h-3 text-cyan-400" />
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {pair.white.retries && pair.white.retries.length > 0 && (
+                          <span
+                            title={`Нелегальных попыток: ${pair.white.retries.length}`}
+                            className="text-[9px] text-rose-400 font-bold px-1 rounded bg-rose-950/80 border border-rose-800"
+                          >
+                            ⚠️{pair.white.retries.length}
+                          </span>
+                        )}
+                        {pair.white.thoughtText && (
+                          <span title="Есть мысли ИИ" className="inline-flex opacity-80 hover:opacity-100">
+                            <Brain className="w-3 h-3 text-cyan-400" />
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ) : (
                     <div />
@@ -164,11 +174,21 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
                       }`}
                     >
                       <MoveLabel move={pair.black} />
-                      {pair.black.thoughtText && (
-                        <span title="Есть мысли ИИ" className="inline-flex opacity-80 hover:opacity-100 ml-1">
-                          <Brain className="w-3 h-3 text-cyan-400" />
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {pair.black.retries && pair.black.retries.length > 0 && (
+                          <span
+                            title={`Нелегальных попыток: ${pair.black.retries.length}`}
+                            className="text-[9px] text-rose-400 font-bold px-1 rounded bg-rose-950/80 border border-rose-800"
+                          >
+                            ⚠️{pair.black.retries.length}
+                          </span>
+                        )}
+                        {pair.black.thoughtText && (
+                          <span title="Есть мысли ИИ" className="inline-flex opacity-80 hover:opacity-100">
+                            <Brain className="w-3 h-3 text-cyan-400" />
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ) : (
                     <div className="flex items-center px-2 py-0.5 text-slate-600 text-[10px] italic">

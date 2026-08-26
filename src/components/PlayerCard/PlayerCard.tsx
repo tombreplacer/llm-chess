@@ -13,6 +13,7 @@ interface PlayerCardProps {
   capturedPieces: PieceSymbol[];
   materialScore: number;
   lastComment?: string;
+  totalErrors?: number;
 }
 
 export const PlayerCard: React.FC<PlayerCardProps> = ({
@@ -22,7 +23,8 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   isThinking,
   capturedPieces,
   materialScore,
-  lastComment
+  lastComment,
+  totalErrors = 0
 }) => {
   const isWhite = color === 'w';
   const preset = GRANDMASTER_PRESETS[config.style] || GRANDMASTER_PRESETS.kasparov;
@@ -66,6 +68,18 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
               <span className={isWhite ? 'badge-color-white' : 'badge-color-black'}>
                 {isWhite ? 'Белые' : 'Черные'}
               </span>
+              {config.type === 'llm' && (
+                <span
+                  title={`Всего нелегальных ходов/ошибок за партию: ${totalErrors}`}
+                  className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                    totalErrors > 0
+                      ? 'bg-rose-950/80 border border-rose-700 text-rose-300'
+                      : 'bg-slate-800/60 border border-slate-700/60 text-slate-400'
+                  }`}
+                >
+                  {totalErrors > 0 ? `⚠️ ${totalErrors} ${totalErrors === 1 ? 'ошибка' : totalErrors < 5 ? 'ошибки' : 'ошибок'}` : '0 ошибок'}
+                </span>
+              )}
             </div>
 
             <p className="text-[10px] text-slate-400 font-medium">
@@ -89,7 +103,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-end gap-1">
           {isThinking && (
             <div className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950 border border-cyan-500/50 rounded-full text-cyan-400 text-[10px] font-semibold animate-pulse">
               <Brain className="w-3 h-3 animate-spin" />

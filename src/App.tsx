@@ -437,6 +437,14 @@ export const App: React.FC = () => {
   const isHumanTurn =
     (currentTurn === 'w' && whiteConfig.type === 'human') || (currentTurn === 'b' && blackConfig.type === 'human');
 
+  const totalWhiteErrors = moveThoughts
+    .filter(t => t.color === 'w')
+    .reduce((sum, t) => sum + (t.retries?.length || 0), 0);
+
+  const totalBlackErrors = moveThoughts
+    .filter(t => t.color === 'b')
+    .reduce((sum, t) => sum + (t.retries?.length || 0), 0);
+
   const activePreset =
     activeThinking.color === 'w'
       ? GRANDMASTER_PRESETS[whiteConfig.style] || GRANDMASTER_PRESETS.kasparov
@@ -471,7 +479,7 @@ export const App: React.FC = () => {
 
           <button
             onClick={() => setIsSettingsOpen(true)}
-            className="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all shadow"
+            className="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all shadow cursor-pointer"
           >
             ⚙️ Настройки
           </button>
@@ -497,6 +505,7 @@ export const App: React.FC = () => {
                     ? (whiteConfig.type === 'human' ? '👤' : (GRANDMASTER_PRESETS[whiteConfig.style]?.avatar || '🤖'))
                     : (blackConfig.type === 'human' ? '👤' : (GRANDMASTER_PRESETS[blackConfig.style]?.avatar || '🤖'))
                 }
+                totalPlayerErrors={displayedSavedThought.color === 'w' ? totalWhiteErrors : totalBlackErrors}
               />
             ) : (
               <ThinkingSpoiler
@@ -522,6 +531,7 @@ export const App: React.FC = () => {
                 isInspectingPause={isInspectingPause}
                 inspectCountdown={inspectCountdown}
                 onSkipPause={handleSkipPause}
+                totalPlayerErrors={activeThinking.color === 'w' ? totalWhiteErrors : totalBlackErrors}
               />
             )}
           </div>
@@ -543,6 +553,7 @@ export const App: React.FC = () => {
                   ? [...moveThoughts].reverse().find(t => t.color === 'b' && t.comment)?.comment
                   : [...moveThoughts].reverse().find(t => t.color === 'w' && t.comment)?.comment
               }
+              totalErrors={boardOrientation === 'w' ? totalBlackErrors : totalWhiteErrors}
             />
           </div>
 
@@ -574,6 +585,7 @@ export const App: React.FC = () => {
                   ? [...moveThoughts].reverse().find(t => t.color === 'w' && t.comment)?.comment
                   : [...moveThoughts].reverse().find(t => t.color === 'b' && t.comment)?.comment
               }
+              totalErrors={boardOrientation === 'w' ? totalWhiteErrors : totalBlackErrors}
             />
           </div>
 
