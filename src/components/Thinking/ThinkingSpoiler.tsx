@@ -40,23 +40,20 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
   const [isOpen, setIsOpen] = useState<boolean>(true);
   const streamEndRef = useRef<HTMLDivElement>(null);
 
+  // В живом режиме держим спойлер открытым для непрерывного чтения мыслей без морганий
   useEffect(() => {
     if (isLive) {
-      if (isThinkingActive || isInspectingPause) {
-        setIsOpen(true);
-      } else if (!isThinkingActive && !isInspectingPause && (thoughtStream.length > 0 || contentStream.length > 0)) {
-        setIsOpen(false);
-      }
+      setIsOpen(true);
     } else if (savedThought) {
-      setIsOpen(false);
+      setIsOpen(true);
     }
-  }, [isLive, isThinkingActive, isInspectingPause]);
+  }, [isLive, savedThought?.timestamp]);
 
   useEffect(() => {
-    if (isLive && (isThinkingActive || isInspectingPause) && isOpen && streamEndRef.current) {
+    if (isLive && isOpen && streamEndRef.current) {
       streamEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [thoughtStream, isOpen, isLive, isThinkingActive, isInspectingPause]);
+  }, [thoughtStream, isOpen, isLive]);
 
   const rawThoughtText = isLive ? thoughtStream : (savedThought?.thoughtText || '');
   const rawContentText = isLive ? contentStream : (savedThought?.finalMoveRaw || '');
