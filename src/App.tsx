@@ -75,35 +75,42 @@ export const App: React.FC = () => {
     setInspectCountdown(null);
   }, []);
 
-  const [whiteConfig, setWhiteConfig] = useState<PlayerConfig>(() => initialSettings?.whiteConfig || {
+  const [whiteConfig, setWhiteConfig] = useState<PlayerConfig>(() => ({
     type: 'human',
     name: 'Кожаный Мешок',
     avatar: '🥊',
     bio: 'Человек с железной волей, решивший доказать превосходство биологического разума над кремнием.',
+    provider: 'lmstudio',
     modelId: 'mock-ai',
     style: 'kasparov',
     temperature: 0.6,
-    maxTokens: 2048
-  });
+    maxTokens: 2048,
+    systemPromptCustom: '',
+    ...(initialSettings?.whiteConfig || {})
+  }));
 
-  const [blackConfig, setBlackConfig] = useState<PlayerConfig>(() => initialSettings?.blackConfig || {
+  const [blackConfig, setBlackConfig] = useState<PlayerConfig>(() => ({
     type: 'llm',
     provider: 'lmstudio',
     name: 'Гарри Каспаров',
     avatar: '⚡',
+    bio: '13-й чемпион мира по шахматам. Агрессивный, динамичный атакующий стиль.',
     modelId: 'mock-ai',
     style: 'kasparov',
     temperature: 0.6,
-    maxTokens: 2048
-  });
+    maxTokens: 2048,
+    systemPromptCustom: '',
+    ...(initialSettings?.blackConfig || {})
+  }));
 
-  const [ttsConfig, setTtsConfig] = useState<TtsConfig>(() => initialSettings?.ttsConfig || {
+  const [ttsConfig, setTtsConfig] = useState<TtsConfig>(() => ({
     enabled: true,
     voiceURI: '',
     rate: 1.0,
     pitch: 1.0,
-    volume: 1.0
-  });
+    volume: 1.0,
+    ...(initialSettings?.ttsConfig || {})
+  }));
 
   // Автосохранение всех настроек в localStorage
   useEffect(() => {
