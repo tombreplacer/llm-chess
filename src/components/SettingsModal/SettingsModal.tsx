@@ -477,6 +477,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </div>
 
+              {/* Лимит токенов (Max Tokens) */}
+              <div className="col-span-full">
+                <div className="flex justify-between text-slate-400 mb-1">
+                  <span>Лимит токенов генерации (Max Tokens):</span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {config.maxTokens === -1 || config.maxTokens === 0 || !config.maxTokens
+                      ? '♾️ Безлимит (Максимум модели)'
+                      : `${config.maxTokens} токенов`}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {[
+                    { val: 1024, label: '1 024' },
+                    { val: 2048, label: '2 048' },
+                    { val: 4096, label: '4 096 (CoT)' },
+                    { val: 8192, label: '8 192 (DeepSeek R1)' },
+                    { val: 16384, label: '16 384' },
+                    { val: -1, label: '♾️ Безлимит' }
+                  ].map(item => {
+                    const isSelected =
+                      (item.val === -1 &&
+                        (config.maxTokens === -1 || config.maxTokens === 0 || !config.maxTokens)) ||
+                      config.maxTokens === item.val;
+
+                    return (
+                      <button
+                        key={item.val}
+                        type="button"
+                        onClick={() => onUpdate({ ...config, maxTokens: item.val })}
+                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all ${
+                          isSelected
+                            ? 'bg-cyan-600/40 border-cyan-400 text-cyan-200 font-bold shadow-sm'
+                            : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-white hover:bg-slate-850'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Для моделей с рассуждениями (DeepSeek R1, QwQ) рекомендуется 4K+ или Безлимит, чтобы мысли не обрезались на полуслове.
+                </p>
+              </div>
+
               {/* Кастомный промпт */}
               <div className="col-span-full">
                 <div className="flex justify-between items-center mb-1">

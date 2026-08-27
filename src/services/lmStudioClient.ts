@@ -158,13 +158,16 @@ export class LMStudioClient {
       { role: 'user', content: userPrompt }
     ];
 
-    const body = {
+    const body: Record<string, any> = {
       model: modelId,
       messages,
       temperature,
-      max_tokens: maxTokens,
       stream: true
     };
+
+    if (maxTokens && maxTokens > 0) {
+      body.max_tokens = maxTokens;
+    }
 
     let response: Response;
     try {

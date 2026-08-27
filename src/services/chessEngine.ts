@@ -130,6 +130,10 @@ export class ChessEngineService {
     return null;
   }
 
+  public undo(): Move | null {
+    return this.chess.undo();
+  }
+
   public getEvaluation(): GameEvaluation {
     const board = this.chess.board();
     
