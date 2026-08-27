@@ -54,6 +54,8 @@ export class ChessJudge {
 
     let finalThinking = '';
     let finalContent = '';
+    let finalTokenCount = 0;
+    let finalTokensPerSecond = 0;
     let chosenLegalMoveSan = '';
     let chosenComment: string | undefined = undefined;
     let rawMoveFound = '';
@@ -80,6 +82,8 @@ export class ChessJudge {
       let fullThinking = '';
       let fullContent = '';
       let rawResponse = '';
+      let turnTokenCount = 0;
+      let turnTokensPerSecond = 0;
 
       try {
         if (playerConfig.modelId === 'mock-ai' || !playerConfig.modelId) {
@@ -93,6 +97,8 @@ export class ChessJudge {
           fullThinking = result.fullThinking;
           fullContent = result.fullContent;
           rawResponse = result.rawResponse;
+          turnTokenCount = result.tokenCount || 0;
+          turnTokensPerSecond = result.tokensPerSecond || 0;
         } else {
           const result = await lmStudioService.streamMove({
             provider: playerConfig.provider || 'lmstudio',
@@ -109,6 +115,8 @@ export class ChessJudge {
           fullThinking = result.fullThinking;
           fullContent = result.fullContent;
           rawResponse = result.rawResponse;
+          turnTokenCount = result.tokenCount || 0;
+          turnTokensPerSecond = result.tokensPerSecond || 0;
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -131,6 +139,8 @@ export class ChessJudge {
 
       finalThinking = fullThinking;
       finalContent = fullContent;
+      finalTokenCount = turnTokenCount;
+      finalTokensPerSecond = turnTokensPerSecond;
 
       const parseResult = lmStudioService.parseAndValidateMove(
         chessEngine.getChess(),
@@ -208,6 +218,8 @@ export class ChessJudge {
       comment: chosenComment,
       finalMoveRaw: rawMoveFound || finalContent,
       durationMs,
+      tokenCount: finalTokenCount,
+      tokensPerSecond: finalTokensPerSecond,
       retries,
       timestamp: Date.now(),
       captured: moveResult.captured

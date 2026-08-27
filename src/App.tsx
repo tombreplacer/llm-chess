@@ -59,6 +59,7 @@ export const App: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<LMStudioModel[]>([]);
   const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>(POPULAR_OPENROUTER_MODELS);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [mobileTab, setMobileTab] = useState<'board' | 'thinking' | 'history'>('board');
   const [maxRetries, setMaxRetries] = useState<number>(() => initialSettings?.maxRetries ?? 3);
   const [postMoveDelaySec, setPostMoveDelaySec] = useState<number>(() => initialSettings?.postMoveDelaySec ?? 3);
 
@@ -129,6 +130,8 @@ export const App: React.FC = () => {
     color: 'w',
     thoughtStream: '',
     contentStream: '',
+    tokenCount: 0,
+    tokensPerSecond: 0,
     isThinking: false,
     isStreaming: false,
     startTime: 0,
@@ -201,6 +204,8 @@ export const App: React.FC = () => {
         color: turnColor,
         thoughtStream: '',
         contentStream: '',
+        tokenCount: 0,
+        tokensPerSecond: 0,
         isThinking: true,
         isStreaming: true,
         startTime: Date.now(),
@@ -232,6 +237,13 @@ export const App: React.FC = () => {
               setActiveThinking(prev => ({
                 ...prev,
                 contentStream: fullContent
+              }));
+            },
+            onTokenMetrics: ({ totalTokens, tokensPerSecond }) => {
+              setActiveThinking(prev => ({
+                ...prev,
+                tokenCount: totalTokens,
+                tokensPerSecond
               }));
             },
             onThinkingFinished: () => {
@@ -434,6 +446,8 @@ export const App: React.FC = () => {
       color: 'w',
       thoughtStream: '',
       contentStream: '',
+      tokenCount: 0,
+      tokensPerSecond: 0,
       isThinking: false,
       isStreaming: false,
       startTime: 0,
@@ -498,42 +512,74 @@ export const App: React.FC = () => {
     <div className="app-container">
       {/* Верхний Header */}
       <header className="header-bar">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-md text-white">
-            <Swords className="w-5 h-5" />
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-md text-white shrink-0">
+            <Swords className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h1 className="text-base font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-cyan-400 bg-clip-text text-transparent">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xs sm:text-base font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-cyan-400 bg-clip-text text-transparent truncate">
               LLM Chess Arena
             </h1>
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] text-slate-400 hidden sm:block truncate">
               Гроссмейстерские битвы с визуализацией потока мыслей нейросетей (LM Studio)
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs font-mono">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
             <span className="text-slate-300">LM Studio:</span>
             <span className="text-cyan-400 font-bold">
-              {availableModels.length > 0 ? `${availableModels.length} моделей` : 'Demo Mode'}
+              {availableModels.length > 0 ? `${availableModels.length} мод.` : 'Demo'}
             </span>
           </div>
 
           <button
             onClick={() => setIsSettingsOpen(true)}
-            className="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all shadow cursor-pointer"
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all shadow cursor-pointer shrink-0"
           >
-            ⚙️ Настройки
+            ⚙️ <span className="hidden xs:inline sm:inline">Настройки</span>
           </button>
         </div>
       </header>
 
-      {/* Основная арена: 3 колонки на весь экран */}
+      {/* Мобильный переключатель вкладок */}
+      <nav className="mobile-nav-bar">
+        <button
+          type="button"
+          onClick={() => setMobileTab('board')}
+          className={`mobile-nav-btn ${mobileTab === 'board' ? 'active' : ''}`}
+        >
+          <span>♟️ Доска</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab('thinking')}
+          className={`mobile-nav-btn ${mobileTab === 'thinking' ? 'active' : ''}`}
+        >
+          <span className="relative inline-flex items-center gap-1.5">
+            <span>🧠 Мысли LLM</span>
+            {activeThinking.isStreaming && (
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            )}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab('history')}
+          className={`mobile-nav-btn ${mobileTab === 'history' ? 'active' : ''}`}
+        >
+          <span>📜 Ходы ({moveThoughts.length})</span>
+        </button>
+      </nav>
+
+      {/* Основная арена: 3 колонки на десктопе, адаптивные вкладки на мобильном */}
       <main className="main-arena">
         {/* ЛЕВАЯ КОЛОНКА: Инспектор мыслей (Thinking Stream) */}
-        <div className="col-panel">
+        <div className={`col-panel ${mobileTab === 'thinking' ? 'mobile-active' : ''}`}>
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {displayedSavedThought ? (
               <ThinkingSpoiler
@@ -556,6 +602,8 @@ export const App: React.FC = () => {
                 isLive={true}
                 thoughtStream={activeThinking.thoughtStream}
                 contentStream={activeThinking.contentStream}
+                tokenCount={activeThinking.tokenCount}
+                tokensPerSecond={activeThinking.tokensPerSecond}
                 isThinkingActive={activeThinking.isThinking}
                 isStreaming={activeThinking.isStreaming}
                 activeColor={activeThinking.color}
@@ -582,7 +630,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: Шахматная доска + Игроки + Управление */}
-        <div className="col-panel items-center justify-between">
+        <div className={`col-panel items-center justify-between ${mobileTab === 'board' ? 'mobile-active' : ''}`}>
           {/* Верхний игрок */}
           <div className="w-full">
             <PlayerCard
@@ -602,9 +650,9 @@ export const App: React.FC = () => {
           </div>
 
           {/* Доска + Eval Bar */}
-          <div className="flex items-center justify-center gap-3 w-full my-auto">
+          <div className="flex items-center justify-center gap-1.5 sm:gap-3 w-full max-w-full my-auto overflow-hidden box-border">
             <EvalBar evaluation={evaluation} isFlipped={boardOrientation === 'b'} />
-            <div className="flex-1 flex justify-center">
+            <div className="flex-1 min-w-0 flex justify-center overflow-hidden">
               <ChessBoard
                 chess={chessState}
                 boardOrientation={boardOrientation}
@@ -633,6 +681,27 @@ export const App: React.FC = () => {
             />
           </div>
 
+          {/* Компактный live-тикер мыслей на мобильном виде доски */}
+          {activeThinking.isStreaming && (
+            <div
+              onClick={() => setMobileTab('thinking')}
+              className="lg:hidden w-full px-3 py-1.5 rounded-xl bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 text-xs flex items-center justify-between cursor-pointer shadow-lg animate-pulse"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <span className="animate-spin text-sm">🧠</span>
+                <span className="truncate font-mono text-[11px] text-slate-200">
+                  {activeThinking.thoughtStream.slice(-45) || 'Генерация рассуждений...'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 pl-2">
+                <span className="px-1.5 py-0.5 rounded bg-cyan-600 text-white font-mono text-[10px] font-bold">
+                  {activeThinking.tokenCount || Math.round(activeThinking.thoughtStream.length / 2.8)} tok
+                </span>
+                <span className="text-[10px] text-cyan-400 font-semibold underline">Мысли →</span>
+              </div>
+            </div>
+          )}
+
           {/* Панель управления */}
           <div className="w-full">
             <GameControls
@@ -651,7 +720,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* ПРАВАЯ КОЛОНКА: История ходов (PGN) и разбор прошлых мыслей */}
-        <div className="col-panel">
+        <div className={`col-panel ${mobileTab === 'history' ? 'mobile-active' : ''}`}>
           <MoveHistory
             moveThoughts={moveThoughts}
             selectedMoveIndex={selectedMoveIndex}

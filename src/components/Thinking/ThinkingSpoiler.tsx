@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { MoveThought, PieceColor, RetryLog } from '../../types/chess';
-import { ChevronDown, ChevronRight, Brain, AlertTriangle, Clock, CheckCircle2, RotateCw, FastForward } from 'lucide-react';
+import { ChevronDown, ChevronRight, Brain, AlertTriangle, Clock, CheckCircle2, RotateCw, FastForward, Zap } from 'lucide-react';
 
 interface ThinkingSpoilerProps {
   isLive?: boolean;
   thoughtStream?: string;
   contentStream?: string;
+  tokenCount?: number;
+  tokensPerSecond?: number;
   isThinkingActive?: boolean;
   isStreaming?: boolean;
   activeColor?: PieceColor;
@@ -25,6 +27,8 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
   isLive = false,
   thoughtStream = '',
   contentStream = '',
+  tokenCount = 0,
+  tokensPerSecond = 0,
   isThinkingActive = false,
   isStreaming = false,
   activeColor = 'w',
@@ -73,6 +77,10 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
     ? moveMatch[1].trim() 
     : (savedThought?.san || (rawContentText.length > 0 && rawContentText.length <= 8 && !rawContentText.includes('\n') ? rawContentText.trim() : ''));
 
+  const liveTokenDisplay = tokenCount || Math.round((rawThoughtText.length + rawContentText.length) / 2.8);
+  const savedTokenDisplay = savedThought?.tokenCount || Math.round(((savedThought?.thoughtText.length || 0) + (savedThought?.finalMoveRaw.length || 0)) / 2.8);
+  const savedSpeedDisplay = savedThought?.tokensPerSecond || (savedThought?.durationMs && savedThought.durationMs > 0 && savedTokenDisplay ? +((savedTokenDisplay / (savedThought.durationMs / 1000)).toFixed(1)) : 0);
+
   return (
     <div className="thinking-card flex flex-col h-full">
       {/* Шапка карточки игрока */}
@@ -104,11 +112,16 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Живой счетчик скорости и токенов во время генерации */}
           {isLive && isStreaming && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/50 text-cyan-400 text-xs font-semibold animate-pulse">
-              <Brain className="w-3.5 h-3.5 animate-spin" />
-              <span>{isThinkingActive ? 'Мыслит...' : 'Ход'}</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 text-xs font-mono font-bold shadow-lg shadow-cyan-950/60 animate-pulse">
+              <Zap className="w-3.5 h-3.5 text-cyan-400 animate-bounce shrink-0" />
+              <span>{liveTokenDisplay} tok</span>
+              <span className="text-cyan-600 font-normal">•</span>
+              <span className="text-emerald-400 font-bold tracking-tight">
+                {tokensPerSecond > 0 ? `${tokensPerSecond.toFixed(1)} t/s` : 'генерация...'}
+              </span>
             </div>
           )}
 
@@ -141,10 +154,27 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
             </div>
           )}
 
+          {/* Сохраненный ход: отображение скорости, токенов и времени */}
           {savedThought && (
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono bg-slate-850 px-2.5 py-1 rounded-lg border border-slate-700">
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
-              <span>{durationSec}s</span>
+            <div className="flex items-center gap-1.5">
+              <div
+                title={`Всего токенов: ${savedTokenDisplay}, средняя скорость: ${savedSpeedDisplay || 0} токенов/сек`}
+                className="flex items-center gap-1 text-xs text-cyan-300 font-mono bg-cyan-950/70 px-2 py-1 rounded-lg border border-cyan-800/80"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span>{savedTokenDisplay} tok</span>
+                {savedSpeedDisplay > 0 && (
+                  <>
+                    <span className="text-cyan-700">•</span>
+                    <span className="text-emerald-400 font-bold">{savedSpeedDisplay} t/s</span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1 text-xs text-slate-400 font-mono bg-slate-850 px-2 py-1 rounded-lg border border-slate-700">
+                <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span>{durationSec}s</span>
+              </div>
             </div>
           )}
         </div>
@@ -160,10 +190,10 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
             <Brain className="w-4 h-4 text-cyan-400 shrink-0" />
             <span>
               {isThinkingActive
-                ? '🧠 Поток сознания LLM (в реальном времени)...'
+                ? `🧠 Поток сознания (${liveTokenDisplay} токенов • ${tokensPerSecond > 0 ? `${tokensPerSecond.toFixed(1)} t/s` : 'расчет...'})...`
                 : isInspectingPause
-                ? `🧠 Изучение рассуждений (${rawThoughtText.length} симв.)...`
-                : `🧠 Рассуждения (${rawThoughtText.length} симв.)`}
+                ? `🧠 Рассуждения (${savedTokenDisplay || liveTokenDisplay} токенов • ${durationSec || '0'}s)`
+                : `🧠 Рассуждения (${savedTokenDisplay} токенов ${savedSpeedDisplay > 0 ? `• ${savedSpeedDisplay} t/s` : ''})`}
             </span>
           </div>
 

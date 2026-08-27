@@ -1,11 +1,18 @@
 import type { LlmProvider, LMStudioModel, OpenRouterModel, PieceColor } from '../types/chess';
 import { Chess } from 'chess.js';
 
+export interface TokenMetrics {
+  totalTokens: number;
+  tokensPerSecond: number;
+  durationMs: number;
+}
+
 export interface StreamCallbacks {
   onThinkingChunk: (chunk: string, fullThinking: string) => void;
   onContentChunk: (chunk: string, fullContent: string) => void;
   onThinkingFinished: () => void;
   onStatusUpdate: (statusText: string) => void;
+  onTokenMetrics?: (metrics: TokenMetrics) => void;
 }
 
 export interface MoveParseResult {
@@ -16,6 +23,15 @@ export interface MoveParseResult {
   isLegal: boolean;
   legalMove?: string;
   reason?: string;
+}
+
+export interface StreamMoveResult {
+  fullThinking: string;
+  fullContent: string;
+  rawResponse: string;
+  tokenCount?: number;
+  tokensPerSecond?: number;
+  durationMs?: number;
 }
 
 export interface StreamMoveOptions {
@@ -115,7 +131,7 @@ export class LMStudioClient {
 
   public async streamMove(
     options: StreamMoveOptions
-  ): Promise<{ fullThinking: string; fullContent: string; rawResponse: string }> {
+  ): Promise<StreamMoveResult> {
     const {
       provider = 'lmstudio',
       baseUrl = this.defaultBaseUrl,
@@ -162,7 +178,8 @@ export class LMStudioClient {
       model: modelId,
       messages,
       temperature,
-      stream: true
+      stream: true,
+      stream_options: { include_usage: true }
     };
 
     if (maxTokens && maxTokens > 0) {
@@ -217,6 +234,25 @@ export class LMStudioClient {
     let thinkingFinishedEmitted = false;
     let buffer = '';
 
+    const streamStartTime = Date.now();
+    let tokenChunksCount = 0;
+    let explicitTokensCount: number | null = null;
+
+    const emitTokenMetrics = () => {
+      const durationMs = Date.now() - streamStartTime;
+      const durationSec = durationMs / 1000;
+      const currentTokens =
+        explicitTokensCount !== null
+          ? explicitTokensCount
+          : Math.max(tokenChunksCount, Math.round(rawResponse.length / 2.8));
+      const speed = durationSec > 0.05 ? +(currentTokens / durationSec).toFixed(1) : 0;
+      callbacks.onTokenMetrics?.({
+        totalTokens: currentTokens,
+        tokensPerSecond: speed,
+        durationMs
+      });
+    };
+
     callbacks.onStatusUpdate('Генерация рассуждений...');
 
     try {
@@ -242,6 +278,13 @@ export class LMStudioClient {
             const jsonStr = trimmed.slice(6);
             try {
               const parsed = JSON.parse(jsonStr);
+
+              // Точный подсчет токенов из usage (если предоставлен провайдером)
+              if (parsed.usage?.completion_tokens) {
+                explicitTokensCount = parsed.usage.completion_tokens;
+                emitTokenMetrics();
+              }
+
               const choice = parsed.choices?.[0];
               if (!choice) continue;
 
@@ -252,7 +295,9 @@ export class LMStudioClient {
               if (reasoningChunk) {
                 fullThinking += reasoningChunk;
                 rawResponse += reasoningChunk;
+                tokenChunksCount++;
                 callbacks.onThinkingChunk(reasoningChunk, fullThinking);
+                emitTokenMetrics();
                 continue;
               }
 
@@ -260,6 +305,8 @@ export class LMStudioClient {
               const contentChunk = delta.content || '';
               if (contentChunk) {
                 rawResponse += contentChunk;
+                tokenChunksCount++;
+                emitTokenMetrics();
                 let chunkText = contentChunk;
 
                 // Проверяем начало <think> или <thought>
@@ -316,7 +363,21 @@ export class LMStudioClient {
       }
     }
 
-    return { fullThinking, fullContent, rawResponse };
+    const finalDurationMs = Date.now() - streamStartTime;
+    const finalTokens =
+      explicitTokensCount !== null
+        ? explicitTokensCount
+        : Math.max(tokenChunksCount, Math.round(rawResponse.length / 2.8));
+    const finalSpeed = finalDurationMs > 50 ? +((finalTokens / (finalDurationMs / 1000)).toFixed(1)) : 0;
+
+    return {
+      fullThinking,
+      fullContent,
+      rawResponse,
+      tokenCount: finalTokens,
+      tokensPerSecond: finalSpeed,
+      durationMs: finalDurationMs
+    };
   }
 
   public parseAndValidateMove(
@@ -443,7 +504,7 @@ export class LMStudioClient {
     styleName: string,
     callbacks: StreamCallbacks,
     abortSignal?: AbortSignal
-  ): Promise<{ fullThinking: string; fullContent: string; rawResponse: string }> {
+  ): Promise<StreamMoveResult> {
     const legalMoves = chess.moves({ verbose: true });
     if (legalMoves.length === 0) {
       throw new Error('Нет доступных легальных ходов (пат или мат).');
@@ -500,10 +561,23 @@ export class LMStudioClient {
     const finalContent = `<comment>${mockComment}</comment>\n<move>${chosenMove.san}</move>`;
     callbacks.onContentChunk(finalContent, finalContent);
 
+    const totalEstimatedTokens = Math.round((fullThinking.length + finalContent.length) / 3);
+    const mockDurationMs = 1200;
+    const mockSpeed = 42.0;
+
+    callbacks.onTokenMetrics?.({
+      totalTokens: totalEstimatedTokens,
+      tokensPerSecond: mockSpeed,
+      durationMs: mockDurationMs
+    });
+
     return {
       fullThinking,
       fullContent: finalContent,
-      rawResponse: `<think>\n${fullThinking}\n</think>\n${finalContent}`
+      rawResponse: `<think>\n${fullThinking}\n</think>\n${finalContent}`,
+      tokenCount: totalEstimatedTokens,
+      tokensPerSecond: mockSpeed,
+      durationMs: mockDurationMs
     };
   }
 }

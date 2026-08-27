@@ -88,6 +88,8 @@ export interface MoveThought {
   comment?: string;
   finalMoveRaw: string;
   durationMs: number;
+  tokenCount?: number;
+  tokensPerSecond?: number;
   retries: RetryLog[];
   timestamp: number;
   captured?: PieceSymbol;
@@ -121,6 +123,8 @@ export interface ActiveThinkingState {
   color: PieceColor;
   thoughtStream: string;
   contentStream: string;
+  tokenCount: number;
+  tokensPerSecond: number;
   isThinking: boolean; // while generating reasoning
   isStreaming: boolean; // while request is active
   startTime: number;
