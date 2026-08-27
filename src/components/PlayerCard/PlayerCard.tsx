@@ -48,7 +48,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
                   : 'bg-slate-950 border-slate-700 text-white'
               }`}
             >
-              {config.type === 'human' ? '👤' : preset.avatar}
+              {config.type === 'human' ? (config.avatar || '👤') : preset.avatar}
             </div>
 
             <div
@@ -63,7 +63,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
           <div>
             <div className="flex items-center gap-1.5">
               <h4 className="font-bold text-white text-xs tracking-wide">
-                {config.type === 'human' ? config.name : preset.name}
+                {config.type === 'human' ? (config.name || 'Человек') : preset.name}
               </h4>
               <span className={isWhite ? 'badge-color-white' : 'badge-color-black'}>
                 {isWhite ? 'Белые' : 'Черные'}
@@ -82,8 +82,17 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
               )}
             </div>
 
-            <p className="text-[10px] text-slate-400 font-medium">
-              {config.type === 'human' ? 'Человек' : (config.modelId || 'LM Studio AI')}
+            <p
+              className="text-[10px] text-slate-400 font-medium truncate max-w-[170px]"
+              title={
+                config.type === 'human'
+                  ? (config.bio || 'Человек')
+                  : `${config.provider === 'openrouter' ? 'OpenRouter: ' : 'LM Studio: '}${config.modelId || 'mock-ai'}`
+              }
+            >
+              {config.type === 'human'
+                ? (config.bio || 'Игрок')
+                : (config.provider === 'openrouter' ? `🌐 ${config.modelId}` : `🖥️ ${config.modelId || 'LM Studio AI'}`)}
             </p>
 
             {capturedPieces.length > 0 && (

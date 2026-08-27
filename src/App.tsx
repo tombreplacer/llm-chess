@@ -8,6 +8,7 @@ import type {
   GameMode,
   GameStatus,
   LMStudioModel,
+  OpenRouterModel,
   MoveThought,
   PieceColor,
   PlayerConfig,
@@ -15,7 +16,7 @@ import type {
 } from './types/chess';
 import { ChessEngineService } from './services/chessEngine';
 import { chessJudge } from './services/chessJudge';
-import { lmStudioService } from './services/lmStudioClient';
+import { lmStudioService, POPULAR_OPENROUTER_MODELS } from './services/lmStudioClient';
 import { speechService } from './services/speechService';
 import { GRANDMASTER_PRESETS } from './services/prompts';
 import { sounds } from './services/soundEffects';
@@ -54,7 +55,9 @@ export const App: React.FC = () => {
   const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(false);
 
   const [lmStudioBaseUrl, setLmStudioBaseUrl] = useState<string>(() => initialSettings?.lmStudioBaseUrl || 'http://localhost:1234/v1');
+  const [openRouterApiKey, setOpenRouterApiKey] = useState<string>(() => initialSettings?.openRouterApiKey || '');
   const [availableModels, setAvailableModels] = useState<LMStudioModel[]>([]);
+  const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>(POPULAR_OPENROUTER_MODELS);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [maxRetries, setMaxRetries] = useState<number>(() => initialSettings?.maxRetries ?? 3);
   const [postMoveDelaySec, setPostMoveDelaySec] = useState<number>(() => initialSettings?.postMoveDelaySec ?? 3);
@@ -74,6 +77,8 @@ export const App: React.FC = () => {
   const [whiteConfig, setWhiteConfig] = useState<PlayerConfig>(() => initialSettings?.whiteConfig || {
     type: 'human',
     name: 'Кожаный Мешок',
+    avatar: '🥊',
+    bio: 'Человек с железной волей, решивший доказать превосходство биологического разума над кремнием.',
     modelId: 'mock-ai',
     style: 'kasparov',
     temperature: 0.6,
@@ -82,7 +87,9 @@ export const App: React.FC = () => {
 
   const [blackConfig, setBlackConfig] = useState<PlayerConfig>(() => initialSettings?.blackConfig || {
     type: 'llm',
+    provider: 'lmstudio',
     name: 'Гарри Каспаров',
+    avatar: '⚡',
     modelId: 'mock-ai',
     style: 'kasparov',
     temperature: 0.6,
@@ -104,6 +111,7 @@ export const App: React.FC = () => {
         gameMode,
         boardOrientation,
         lmStudioBaseUrl,
+        openRouterApiKey,
         maxRetries,
         postMoveDelaySec,
         whiteConfig,
@@ -112,7 +120,7 @@ export const App: React.FC = () => {
       };
       localStorage.setItem('llm_chess_arena_settings_v1', JSON.stringify(toSave));
     } catch {}
-  }, [gameMode, boardOrientation, lmStudioBaseUrl, maxRetries, postMoveDelaySec, whiteConfig, blackConfig, ttsConfig]);
+  }, [gameMode, boardOrientation, lmStudioBaseUrl, openRouterApiKey, maxRetries, postMoveDelaySec, whiteConfig, blackConfig, ttsConfig]);
 
   const [moveThoughts, setMoveThoughts] = useState<MoveThought[]>([]);
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number | null>(null);
@@ -154,13 +162,26 @@ export const App: React.FC = () => {
       .then(models => {
         if (models && models.length > 0) {
           setAvailableModels(models);
-          setBlackConfig(prev => (prev.modelId === 'mock-ai' ? { ...prev, modelId: models[0].id } : prev));
+          setBlackConfig(prev => (prev.modelId === 'mock-ai' && prev.provider !== 'openrouter' ? { ...prev, modelId: models[0].id } : prev));
         }
       })
       .catch(() => {
         console.log('LM Studio не обнаружен, используется встроенный демо-режим.');
       });
   }, [lmStudioBaseUrl]);
+
+  useEffect(() => {
+    if (openRouterApiKey) {
+      lmStudioService
+        .fetchOpenRouterModels(openRouterApiKey)
+        .then(models => {
+          if (models && models.length > 0) {
+            setOpenRouterModels(models);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [openRouterApiKey]);
 
   const triggerLlmMove = useCallback(
     async (turnColor: PieceColor) => {
@@ -197,6 +218,7 @@ export const App: React.FC = () => {
           opponentConfig,
           lastOpponentComment,
           lmStudioBaseUrl,
+          openRouterApiKey,
           maxRetries,
           callbacks: {
             onThinkingChunk: (_chunk, fullThinking) => {
@@ -280,7 +302,7 @@ export const App: React.FC = () => {
         }));
       }
     },
-    [whiteConfig, blackConfig, lmStudioBaseUrl, maxRetries, postMoveDelaySec, syncGameState]
+    [whiteConfig, blackConfig, lmStudioBaseUrl, openRouterApiKey, maxRetries, postMoveDelaySec, syncGameState]
   );
 
   const handleHumanMove = (moveInput: { from: Square; to: Square; promotion?: PieceSymbol }) => {
@@ -368,11 +390,33 @@ export const App: React.FC = () => {
     setGameMode(mode);
     setIsAutoPlaying(false);
     if (mode === 'llm_vs_llm') {
-      setWhiteConfig(prev => ({ ...prev, type: 'llm' }));
-      setBlackConfig(prev => ({ ...prev, type: 'llm', style: prev.style === 'kasparov' ? 'tal' : prev.style }));
+      setWhiteConfig(prev => ({
+        ...prev,
+        type: 'llm',
+        name: GRANDMASTER_PRESETS[prev.style]?.name || 'Гарри Каспаров'
+      }));
+      setBlackConfig(prev => ({
+        ...prev,
+        type: 'llm',
+        style: prev.style === 'kasparov' ? 'tal' : prev.style,
+        name: GRANDMASTER_PRESETS[prev.style === 'kasparov' ? 'tal' : prev.style]?.name || 'Михаил Таль'
+      }));
     } else if (mode === 'human_vs_llm') {
-      setWhiteConfig(prev => ({ ...prev, type: 'human' }));
-      setBlackConfig(prev => ({ ...prev, type: 'llm' }));
+      setWhiteConfig(prev => {
+        const isPresetName = Object.values(GRANDMASTER_PRESETS).some(p => p.name === prev.name);
+        return {
+          ...prev,
+          type: 'human',
+          name: isPresetName || !prev.name ? 'Кожаный Мешок' : prev.name,
+          avatar: prev.avatar || '🥊',
+          bio: prev.bio || 'Человек с железной волей, решивший доказать превосходство биологического разума над кремнием.'
+        };
+      });
+      setBlackConfig(prev => ({
+        ...prev,
+        type: 'llm',
+        name: GRANDMASTER_PRESETS[prev.style]?.name || 'Гарри Каспаров'
+      }));
       setBoardOrientation('w');
     }
   };
@@ -624,6 +668,10 @@ export const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         lmStudioBaseUrl={lmStudioBaseUrl}
         onUpdateBaseUrl={setLmStudioBaseUrl}
+        openRouterApiKey={openRouterApiKey}
+        onUpdateOpenRouterApiKey={setOpenRouterApiKey}
+        openRouterModels={openRouterModels}
+        onSetOpenRouterModels={setOpenRouterModels}
         whiteConfig={whiteConfig}
         onUpdateWhiteConfig={setWhiteConfig}
         blackConfig={blackConfig}

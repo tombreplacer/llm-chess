@@ -1,4 +1,4 @@
-import type { LMStudioModel, PieceColor } from '../types/chess';
+import type { LlmProvider, LMStudioModel, OpenRouterModel, PieceColor } from '../types/chess';
 import { Chess } from 'chess.js';
 
 export interface StreamCallbacks {
@@ -17,6 +17,35 @@ export interface MoveParseResult {
   legalMove?: string;
   reason?: string;
 }
+
+export interface StreamMoveOptions {
+  provider?: LlmProvider;
+  baseUrl?: string;
+  apiKey?: string;
+  modelId: string;
+  systemPrompt: string;
+  userPrompt: string;
+  temperature?: number;
+  maxTokens?: number;
+  callbacks: StreamCallbacks;
+  abortSignal?: AbortSignal;
+}
+
+export const POPULAR_OPENROUTER_MODELS: OpenRouterModel[] = [
+  { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (Deep Thinking)', description: 'Топовая reasoning-модель с глубоким расчетом ходов' },
+  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3 (Chat)', description: 'Быстрая, мощная и экономичная модель' },
+  { id: 'anthropic/claude-3.7-sonnet', name: 'Claude 3.7 Sonnet', description: 'Флагман Anthropic с гибридным мышлением' },
+  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Выдающийся интеллект и гроссмейстерская точность' },
+  { id: 'openai/gpt-4o', name: 'GPT-4o (OpenAI)', description: 'Флагманская мультимодальная модель OpenAI' },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', description: 'Очень быстрая и дешевая модель для блица' },
+  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', description: 'Сверхбыстрая модель нового поколения от Google' },
+  { id: 'google/gemini-2.0-pro-exp-02-05:free', name: 'Gemini 2.0 Pro (Free)', description: 'Экспериментальная мощная модель (бесплатно)' },
+  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B Instruct', description: 'Открытая модель мирового уровня' },
+  { id: 'qwen/qwq-32b', name: 'QwQ 32B (Qwen Reasoning)', description: 'Специализированная модель для сложного анализа' },
+  { id: 'qwen/qwen-2.5-72b-instruct', name: 'Qwen 2.5 72B Instruct', description: 'Мощнейшая модель от Alibaba Cloud' },
+  { id: 'mistralai/mistral-large-2411', name: 'Mistral Large 2411', description: 'Флагманская европейская модель Mistral AI' },
+  { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B (Free)', description: 'Легкая бесплатная модель для тестов' }
+];
 
 export class LMStudioClient {
   private defaultBaseUrl = 'http://localhost:1234/v1';
@@ -47,19 +76,82 @@ export class LMStudioClient {
     }
   }
 
+  public async fetchOpenRouterModels(apiKey?: string): Promise<OpenRouterModel[]> {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://llm-chess-arena.local',
+        'X-Title': 'LLM Chess Arena'
+      };
+      if (apiKey && apiKey.trim()) {
+        headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+      }
+
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        method: 'GET',
+        headers
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data && Array.isArray(data.data)) {
+        return data.data.map((m: { id: string; name?: string; description?: string; context_length?: number; pricing?: { prompt?: string; completion?: string } }) => ({
+          id: m.id,
+          name: m.name || m.id,
+          description: m.description || '',
+          context_length: m.context_length,
+          pricing: m.pricing
+        }));
+      }
+      return POPULAR_OPENROUTER_MODELS;
+    } catch (err: unknown) {
+      console.warn('OpenRouter models fetch failed, using popular presets:', err);
+      return POPULAR_OPENROUTER_MODELS;
+    }
+  }
+
   public async streamMove(
-    baseUrl: string,
-    modelId: string,
-    systemPrompt: string,
-    userPrompt: string,
-    temperature: number = 0.5,
-    maxTokens: number = 2048,
-    callbacks: StreamCallbacks,
-    abortSignal?: AbortSignal
+    options: StreamMoveOptions
   ): Promise<{ fullThinking: string; fullContent: string; rawResponse: string }> {
+    const {
+      provider = 'lmstudio',
+      baseUrl = this.defaultBaseUrl,
+      apiKey,
+      modelId,
+      systemPrompt,
+      userPrompt,
+      temperature = 0.5,
+      maxTokens = 2048,
+      callbacks,
+      abortSignal
+    } = options;
+
+    const isLocal = provider === 'lmstudio';
     const cleanUrl = baseUrl.replace(/\/+$/, '');
-    
-    callbacks.onStatusUpdate('Отправка запроса в LM Studio...');
+    const endpoint = isLocal ? `${cleanUrl}/chat/completions` : 'https://openrouter.ai/api/v1/chat/completions';
+
+    if (!isLocal && (!apiKey || !apiKey.trim())) {
+      throw new Error('Для игры через OpenRouter укажите ваш API-ключ в окне Настроек (⚙️ -> вкладка OpenRouter).');
+    }
+
+    callbacks.onStatusUpdate(
+      isLocal
+        ? 'Отправка запроса в LM Studio...'
+        : `Отправка запроса в OpenRouter (${modelId})...`
+    );
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    if (!isLocal) {
+      headers['Authorization'] = `Bearer ${apiKey?.trim() || ''}`;
+      headers['HTTP-Referer'] = 'https://llm-chess-arena.local';
+      headers['X-Title'] = 'LLM Chess Arena';
+    }
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -76,26 +168,40 @@ export class LMStudioClient {
 
     let response: Response;
     try {
-      response = await fetch(`${cleanUrl}/chat/completions`, {
+      response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify(body),
         signal: abortSignal
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`Ошибка соединения с LM Studio (${cleanUrl}): ${msg}`);
+      throw new Error(`Ошибка соединения с ${isLocal ? 'LM Studio' : 'OpenRouter'}: ${msg}`);
     }
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '');
-      throw new Error(`LM Studio HTTP ${response.status}: ${response.statusText} ${errBody}`);
+      let cleanErrMsg = errBody;
+      try {
+        const parsedErr = JSON.parse(errBody);
+        if (parsedErr.error?.message) {
+          cleanErrMsg = parsedErr.error.message;
+        }
+      } catch {}
+
+      if (response.status === 401) {
+        throw new Error('OpenRouter 401: Неверный или недействительный API-ключ. Проверьте ключ в Настройках ⚙️.');
+      } else if (response.status === 402) {
+        throw new Error(`OpenRouter 402: Недостаточно средств на балансе аккаунта для модели ${modelId}.`);
+      } else if (response.status === 429) {
+        throw new Error('OpenRouter 429: Превышен лимит запросов (Rate limit). Попробуйте снова через несколько секунд.');
+      }
+
+      throw new Error(`${isLocal ? 'LM Studio' : 'OpenRouter'} HTTP ${response.status}: ${response.statusText} — ${cleanErrMsg}`);
     }
 
     if (!response.body) {
-      throw new Error('Ответ LM Studio не содержит потока данных (empty body).');
+      throw new Error(`Ответ сервера ${isLocal ? 'LM Studio' : 'OpenRouter'} не содержит потока данных (empty body).`);
     }
 
     const reader = response.body.getReader();

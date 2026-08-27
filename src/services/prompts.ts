@@ -133,7 +133,11 @@ export function buildSystemPrompt(
   if (opponentConfig) {
     const oppPreset = GRANDMASTER_PRESETS[opponentConfig.style];
     if (opponentConfig.type === 'human') {
-      opponentInfo = `Твой соперник в этой партии: Человек (имя: "${opponentConfig.name}"). Учитывай человеческие ошибки, цейтнот и психологию.`;
+      const humanName = opponentConfig.name?.trim() || 'Человек (Кожаный Мешок)';
+      const bioPart = opponentConfig.bio?.trim() 
+        ? `\n- Характер, психологический портрет и стиль игры: «${opponentConfig.bio.trim()}».` 
+        : '';
+      opponentInfo = `Твой соперник в этой партии: Человек (имя/никнейм: "${humanName}").${bioPart}\nУчитывай человеческие ошибки, цейтнот, психологию и его описанный стиль в своих рассуждениях и комментариях!`;
     } else if (oppPreset) {
       opponentInfo = `Твой соперник в этой партии: ${oppPreset.name} (${oppPreset.title}). ${oppPreset.description}`;
     }
@@ -142,8 +146,8 @@ export function buildSystemPrompt(
   return `Ты — элитный шахматный гроссмейстер мирового уровня. Твоя цель — победить соперника, играя на высочайшем уровне тактической и позиционной глубины.
 
 ${preset.promptFlavor}
-${opponentInfo ? `\n# ИНФОРМАЦИЯ О ТВОЕМ СОПЕРНИКЕ:\n${opponentInfo}\nУчитывай стиль и слабости оппонента в своих рассуждениях!\n` : ''}
-${customPrompt ? `\nДополнительные инструкции игрока:\n${customPrompt}\n` : ''}
+${opponentInfo ? `\n# ИНФОРМАЦИЯ О ТВОЕМ СОПЕРНИКЕ:\n${opponentInfo}\n` : ''}
+${customPrompt ? `\n# ДОПОЛНИТЕЛЬНЫЕ ИНСТРУКЦИИ:\n${customPrompt}\n` : ''}
 
 # АЛГОРИТМ ТВОЕГО МЫШЛЕНИЯ (Chain-of-Thought):
 В каждом ходе ты ОБЯЗАН провести структурированный глубокий анализ:
@@ -180,7 +184,9 @@ export function buildUserMovePrompt(
   const opponentColor = color === 'w' ? 'Черных' : 'Белых';
   const oppPreset = opponentConfig ? GRANDMASTER_PRESETS[opponentConfig.style] : null;
   const oppName = opponentConfig 
-    ? (opponentConfig.type === 'human' ? `${opponentConfig.name} (Человек)` : `${oppPreset?.name || opponentConfig.name}`)
+    ? (opponentConfig.type === 'human' 
+        ? `${opponentConfig.name?.trim() || 'Человек'}${opponentConfig.bio?.trim() ? ` («${opponentConfig.bio.trim()}»)` : ''}` 
+        : `${oppPreset?.name || opponentConfig.name}`)
     : opponentColor;
   const fen = chess.fen();
   const asciiBoard = generateAsciiBoard(chess);

@@ -12,6 +12,7 @@ export interface ExecuteMoveParams {
   opponentConfig?: PlayerConfig;
   lastOpponentComment?: string;
   lmStudioBaseUrl: string;
+  openRouterApiKey?: string;
   maxRetries?: number;
   callbacks: StreamCallbacks;
   abortSignal?: AbortSignal;
@@ -32,6 +33,7 @@ export class ChessJudge {
       opponentConfig,
       lastOpponentComment,
       lmStudioBaseUrl,
+      openRouterApiKey,
       maxRetries = 3,
       callbacks,
       abortSignal
@@ -92,16 +94,18 @@ export class ChessJudge {
           fullContent = result.fullContent;
           rawResponse = result.rawResponse;
         } else {
-          const result = await lmStudioService.streamMove(
-            lmStudioBaseUrl,
-            playerConfig.modelId,
+          const result = await lmStudioService.streamMove({
+            provider: playerConfig.provider || 'lmstudio',
+            baseUrl: lmStudioBaseUrl,
+            apiKey: openRouterApiKey,
+            modelId: playerConfig.modelId,
             systemPrompt,
             userPrompt,
-            playerConfig.temperature,
-            playerConfig.maxTokens,
+            temperature: playerConfig.temperature,
+            maxTokens: playerConfig.maxTokens,
             callbacks,
             abortSignal
-          );
+          });
           fullThinking = result.fullThinking;
           fullContent = result.fullContent;
           rawResponse = result.rawResponse;

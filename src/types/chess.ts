@@ -26,15 +26,31 @@ export interface GrandmasterPreset {
   promptFlavor: string;
 }
 
+export type LlmProvider = 'lmstudio' | 'openrouter';
+
 export interface LMStudioModel {
   id: string;
-  object: string;
+  object?: string;
   owned_by?: string;
+}
+
+export interface OpenRouterModel {
+  id: string;
+  name?: string;
+  description?: string;
+  context_length?: number;
+  pricing?: {
+    prompt?: string;
+    completion?: string;
+  };
 }
 
 export interface PlayerConfig {
   type: PlayerType;
+  provider?: LlmProvider;
   name: string;
+  avatar?: string;
+  bio?: string;
   modelId: string;
   style: GrandmasterStyle;
   temperature: number;
