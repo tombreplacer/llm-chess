@@ -13,6 +13,7 @@ import {
   User
 } from 'lucide-react';
 import { sounds } from '../../services/soundEffects';
+import { Button } from '@/components/ui/button';
 
 interface GameControlsProps {
   gameMode: GameMode;
@@ -47,93 +48,104 @@ export const GameControls: React.FC<GameControlsProps> = ({
   };
 
   return (
-    <div className="w-full max-w-full bg-slate-900 border border-slate-800 rounded-xl p-2 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-1.5 box-border overflow-hidden">
-      {/* Режимы */}
-      <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 w-full sm:w-auto">
-        <button
+    <div className="w-full max-w-full bg-slate-900/90 border border-border/80 rounded-2xl p-1.5 sm:p-2 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-1.5 overflow-hidden backdrop-blur-xl">
+      {/* Переключатель режимов */}
+      <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-border/80 w-full sm:w-auto">
+        <Button
+          type="button"
+          size="sm"
+          variant={gameMode === 'human_vs_llm' ? 'default' : 'ghost'}
           onClick={() => onChangeMode('human_vs_llm')}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-semibold transition-all ${
-            gameMode === 'human_vs_llm'
-              ? 'bg-indigo-600 text-white shadow'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className="flex-1 sm:flex-initial h-7 sm:h-8 text-xs gap-1.5 px-2.5"
         >
           <User className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">Человек vs LLM</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
+          type="button"
+          size="sm"
+          variant={gameMode === 'llm_vs_llm' ? 'neon' : 'ghost'}
           onClick={() => onChangeMode('llm_vs_llm')}
-          className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-semibold transition-all ${
-            gameMode === 'llm_vs_llm'
-              ? 'bg-cyan-600 text-white shadow'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className="flex-1 sm:flex-initial h-7 sm:h-8 text-xs gap-1.5 px-2.5"
         >
           <Bot className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">LLM vs LLM</span>
-        </button>
+        </Button>
       </div>
 
-      {/* Кнопки */}
+      {/* Кнопки управления */}
       <div className="flex items-center justify-center gap-1 sm:gap-1.5 w-full sm:w-auto flex-wrap">
         {gameMode === 'llm_vs_llm' && (
-          <button
+          <Button
+            type="button"
+            size="sm"
+            variant={isAutoPlaying ? 'amber' : 'emerald'}
             onClick={onToggleAutoPlay}
             disabled={isGameOver}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow ${
-              isAutoPlaying
-                ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-            }`}
+            className="h-7 sm:h-8 text-xs gap-1 px-2.5"
           >
             {isAutoPlaying ? <Pause className="w-3.5 h-3.5 shrink-0" /> : <Play className="w-3.5 h-3.5 shrink-0" />}
             <span>{isAutoPlaying ? 'Пауза' : 'Автоплей'}</span>
-          </button>
+          </Button>
         )}
 
-        <button
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
           onClick={onStepMove}
           disabled={isThinking || isGameOver || isAutoPlaying}
           title="Сделать один ход LLM"
-          className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-lg border border-slate-700 transition-colors shadow shrink-0"
+          className="h-7 sm:h-8 text-xs gap-1 px-2.5 hover:border-primary/50"
         >
-          <SkipForward className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <SkipForward className="w-3.5 h-3.5 text-primary shrink-0" />
           <span>Ход</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="secondary"
           onClick={onFlipBoard}
           title="Перевернуть доску"
-          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition-colors shrink-0"
+          className="hover:text-primary"
         >
           <ArrowUpDown className="w-3.5 h-3.5" />
-        </button>
+        </Button>
 
-        <button
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="secondary"
           onClick={toggleSound}
           title={isMuted ? 'Включить звук' : 'Выключить звук'}
-          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition-colors shrink-0"
         >
-          {isMuted ? <VolumeX className="w-3.5 h-3.5 text-slate-500" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
-        </button>
+          {isMuted ? <VolumeX className="w-3.5 h-3.5 text-muted-foreground" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+        </Button>
 
-        <button
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="secondary"
           onClick={onResetGame}
           title="Новая партия"
-          className="p-1.5 bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-rose-200 rounded-lg border border-slate-700 transition-colors shrink-0"
+          className="hover:bg-rose-950/80 hover:text-rose-300 hover:border-rose-700/60"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-        </button>
+        </Button>
 
-        <button
+        <Button
+          type="button"
+          size="sm"
+          variant="neon"
           onClick={onOpenSettings}
           title="Настройки"
-          className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold text-xs rounded-lg border border-slate-700 transition-colors shadow shrink-0"
+          className="h-7 sm:h-8 text-xs gap-1 px-2.5"
         >
-          <Settings className="w-3.5 h-3.5 animate-spin-slow shrink-0" />
+          <Settings className="w-3.5 h-3.5 shrink-0" />
           <span className="hidden sm:inline">Настройки</span>
-        </button>
+        </Button>
       </div>
     </div>
   );

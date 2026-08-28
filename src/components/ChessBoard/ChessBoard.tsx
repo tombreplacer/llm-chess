@@ -123,8 +123,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
   };
 
   return (
-    <div className="chess-board-wrapper">
-      <div className="chess-grid">
+    <div className="relative aspect-square w-full max-w-[min(52vh,480px)] min-w-0 mx-auto rounded-2xl p-1.5 bg-gradient-to-br from-slate-800 to-slate-950 shadow-2xl border border-slate-700/60 select-none">
+      <div className="grid grid-cols-8 grid-rows-8 w-full h-full rounded-xl overflow-hidden shadow-inner border-2 border-slate-950">
         {displayRanks.map((rank, rIdx) =>
           displayFiles.map((file, fIdx) => {
             const square = `${file}${rank}` as Square;
@@ -136,15 +136,16 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
             const isLegalDest = legalDestinations.includes(square);
             const isCheckSquare = isKingInCheck(square);
 
-            const squareClasses = [
-              'chess-square',
-              isLight ? 'chess-square-light' : 'chess-square-dark',
-              isSelected ? 'chess-square-selected' : '',
-              isLastMove ? 'chess-square-last-move' : '',
-              isCheckSquare ? 'chess-square-check' : ''
-            ]
-              .filter(Boolean)
-              .join(' ');
+            let bgClass = isLight ? 'bg-[#d8e2ec]' : 'bg-[#475e7a]';
+            if (isLastMove) {
+              bgClass = isLight ? 'bg-[#fef08a]' : 'bg-[#ca8a04]';
+            }
+            if (isSelected) {
+              bgClass = 'bg-emerald-500 text-white';
+            }
+            if (isCheckSquare) {
+              bgClass = 'bg-rose-600 animate-pulse';
+            }
 
             return (
               <div
@@ -152,13 +153,13 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 onClick={() => handleSquareClick(square)}
                 onDragOver={handleDragOver}
                 onDrop={e => handleDrop(square, e)}
-                className={squareClasses}
+                className={`relative flex items-center justify-center cursor-pointer transition-colors duration-100 ${bgClass}`}
               >
                 {/* Метка ранга (1-8) */}
                 {fIdx === 0 && (
                   <span
-                    className={`coord-label coord-rank ${
-                      isLight ? 'coord-light' : 'coord-dark'
+                    className={`absolute top-0.5 left-1 text-[8px] sm:text-[9px] font-mono font-bold pointer-events-none select-none z-10 ${
+                      isLight ? 'text-[#475e7a]' : 'text-[#d8e2ec]'
                     }`}
                   >
                     {rank}
@@ -168,8 +169,8 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 {/* Метка вертикали (a-h) */}
                 {rIdx === 7 && (
                   <span
-                    className={`coord-label coord-file ${
-                      isLight ? 'coord-light' : 'coord-dark'
+                    className={`absolute bottom-0.5 right-1 text-[8px] sm:text-[9px] font-mono font-bold pointer-events-none select-none z-10 ${
+                      isLight ? 'text-[#475e7a]' : 'text-[#d8e2ec]'
                     }`}
                   >
                     {file}
@@ -178,7 +179,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
                 {/* Индикатор легального хода */}
                 {isLegalDest && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                     {piece ? (
                       <div className="w-full h-full border-4 border-rose-500/80 rounded-full animate-pulse scale-90" />
                     ) : (
@@ -208,14 +209,14 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
       {/* Модальное окно превращения пешки */}
       {pendingPromotion && (
-        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center z-30 p-6">
-          <h4 className="text-lg font-bold text-white mb-4 drop-shadow">Превращение пешки:</h4>
-          <div className="flex gap-3 bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-2xl">
+        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center z-30 p-6 animate-in fade-in zoom-in-95">
+          <h4 className="text-sm sm:text-base font-bold text-white mb-4 drop-shadow">Выберите фигуру:</h4>
+          <div className="flex gap-2.5 bg-slate-900 p-3 rounded-2xl border border-border shadow-2xl">
             {(['q', 'r', 'b', 'n'] as PieceSymbol[]).map(pSymbol => (
               <button
                 key={pSymbol}
                 onClick={() => handlePromotionSelect(pSymbol)}
-                className="w-14 h-14 p-2 bg-slate-800 hover:bg-emerald-600 rounded-lg transition-colors flex items-center justify-center shadow-md hover:scale-110 active:scale-95"
+                className="w-12 h-12 sm:w-14 sm:h-14 p-2 bg-slate-800 hover:bg-emerald-600 rounded-xl transition-all flex items-center justify-center shadow-md hover:scale-110 active:scale-95 cursor-pointer"
               >
                 <ChessPieceSvg type={pSymbol} color={chess.turn()} />
               </button>

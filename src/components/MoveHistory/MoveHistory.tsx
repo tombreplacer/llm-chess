@@ -1,6 +1,8 @@
 import React from 'react';
 import type { MoveThought } from '../../types/chess';
 import { Brain, Copy, Check, ScrollText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface MoveHistoryProps {
   moveThoughts: MoveThought[];
@@ -26,7 +28,7 @@ const MoveLabel: React.FC<{ move: MoveThought }> = ({ move }) => {
             ? 'text-amber-300 font-bold'
             : isCheck
             ? 'text-rose-400 font-bold'
-            : 'text-slate-200'
+            : 'text-foreground'
         }
       >
         {san}
@@ -72,41 +74,51 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
   }
 
   return (
-    <div className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg flex flex-col h-full">
-      <div className="flex items-center justify-between pb-2 border-b">
-        <div className="flex items-center gap-1.5">
-          <ScrollText className="w-4 h-4 text-cyan-400" />
-          <h3 className="font-bold text-white text-xs">История ходов</h3>
+    <div className="w-full bg-slate-900/90 border border-border/80 rounded-2xl p-3.5 shadow-xl flex flex-col h-full backdrop-blur-xl">
+      <div className="flex items-center justify-between pb-2.5 border-b border-border/80">
+        <div className="flex items-center gap-2">
+          <ScrollText className="w-4 h-4 text-primary" />
+          <h3 className="font-bold text-foreground text-xs sm:text-sm">История ходов</h3>
+          <Badge variant="secondary" className="font-mono text-[10px] py-0 px-1.5">
+            {moveThoughts.length}
+          </Badge>
         </div>
 
-        <div className="flex items-center gap-1">
-          <button
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
             onClick={handleCopyFen}
             title="Скопировать FEN"
-            className="px-2 py-0.5 text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 flex items-center gap-1 transition-colors"
+            className="h-6 px-2 text-[10px] font-mono gap-1"
           >
             {copiedFen ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
             <span>FEN</span>
-          </button>
-          <button
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
             onClick={handleCopyPgn}
             title="Скопировать PGN"
-            className="px-2 py-0.5 text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 flex items-center gap-1 transition-colors"
+            className="h-6 px-2 text-[10px] font-mono gap-1"
           >
             {copiedPgn ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
             <span>PGN</span>
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Список ходов в виде четкой 3-колоночной сетки */}
-      <div className="flex-1 overflow-y-auto mt-1.5 max-h-[calc(100vh-180px)] custom-scrollbar pr-1">
+      <div className="flex-1 overflow-y-auto mt-2 max-h-[calc(100vh-180px)] custom-scrollbar pr-1">
         {pairedMoves.length === 0 ? (
-          <div className="text-center text-[11px] text-slate-500 py-6 italic">
+          <div className="text-center text-xs text-muted-foreground py-8 italic">
             Партия еще не началась.
           </div>
         ) : (
-          <div className="space-y-0.5 text-xs font-mono">
+          <div className="space-y-1 text-xs font-mono">
             {pairedMoves.map(pair => {
               const whiteIdx = (pair.moveNumber - 1) * 2;
               const blackIdx = whiteIdx + 1;
@@ -120,39 +132,36 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
               return (
                 <div
                   key={pair.moveNumber}
-                  style={{ display: 'grid', gridTemplateColumns: '26px 1fr 1fr', gap: '4px' }}
-                  className="items-center rounded hover:bg-slate-800/40 p-0.5"
+                  className="grid grid-cols-[28px_1fr_1fr] gap-1 items-center rounded-xl hover:bg-slate-800/40 p-0.5 transition-colors"
                 >
                   {/* Номер хода */}
-                  <span className="text-slate-500 font-bold text-[11px] text-right pr-1">
+                  <span className="text-muted-foreground font-bold text-[11px] text-right pr-1 select-none">
                     {pair.moveNumber}.
                   </span>
 
                   {/* Ход белых */}
                   {pair.white ? (
                     <button
+                      type="button"
                       onClick={() => onSelectMove(isWhiteSelected ? null : whiteIdx)}
-                      className={`flex items-center justify-between px-2 py-0.5 rounded text-left transition-colors border ${
+                      className={`flex items-center justify-between px-2 py-1 rounded-lg text-left transition-all border cursor-pointer ${
                         isWhiteSelected
-                          ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50 font-bold shadow-sm'
+                          ? 'bg-primary/20 text-primary border-primary font-bold shadow-cyan-glow'
                           : isWhiteCapture
-                          ? 'bg-rose-950/30 border-rose-900/40 hover:bg-rose-950/60'
-                          : 'border-transparent hover:bg-slate-800'
+                          ? 'bg-rose-950/30 border-rose-900/50 hover:bg-rose-950/50'
+                          : 'bg-slate-950/40 border-border/40 hover:bg-slate-800 hover:border-border'
                       }`}
                     >
                       <MoveLabel move={pair.white} />
                       <div className="flex items-center gap-1">
                         {pair.white.retries && pair.white.retries.length > 0 && (
-                          <span
-                            title={`Нелегальных попыток: ${pair.white.retries.length}`}
-                            className="text-[9px] text-rose-400 font-bold px-1 rounded bg-rose-950/80 border border-rose-800"
-                          >
+                          <Badge variant="rose" className="text-[9px] py-0 px-1 font-bold">
                             ⚠️{pair.white.retries.length}
-                          </span>
+                          </Badge>
                         )}
                         {pair.white.thoughtText && (
                           <span title="Есть мысли ИИ" className="inline-flex opacity-80 hover:opacity-100">
-                            <Brain className="w-3 h-3 text-cyan-400" />
+                            <Brain className="w-3 h-3 text-primary" />
                           </span>
                         )}
                       </div>
@@ -164,34 +173,32 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
                   {/* Ход черных */}
                   {pair.black ? (
                     <button
+                      type="button"
                       onClick={() => onSelectMove(isBlackSelected ? null : blackIdx)}
-                      className={`flex items-center justify-between px-2 py-0.5 rounded text-left transition-colors border ${
+                      className={`flex items-center justify-between px-2 py-1 rounded-lg text-left transition-all border cursor-pointer ${
                         isBlackSelected
-                          ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50 font-bold shadow-sm'
+                          ? 'bg-primary/20 text-primary border-primary font-bold shadow-cyan-glow'
                           : isBlackCapture
-                          ? 'bg-rose-950/30 border-rose-900/40 hover:bg-rose-950/60'
-                          : 'border-transparent hover:bg-slate-800'
+                          ? 'bg-rose-950/30 border-rose-900/50 hover:bg-rose-950/50'
+                          : 'bg-slate-950/40 border-border/40 hover:bg-slate-800 hover:border-border'
                       }`}
                     >
                       <MoveLabel move={pair.black} />
                       <div className="flex items-center gap-1">
                         {pair.black.retries && pair.black.retries.length > 0 && (
-                          <span
-                            title={`Нелегальных попыток: ${pair.black.retries.length}`}
-                            className="text-[9px] text-rose-400 font-bold px-1 rounded bg-rose-950/80 border border-rose-800"
-                          >
+                          <Badge variant="rose" className="text-[9px] py-0 px-1 font-bold">
                             ⚠️{pair.black.retries.length}
-                          </span>
+                          </Badge>
                         )}
                         {pair.black.thoughtText && (
                           <span title="Есть мысли ИИ" className="inline-flex opacity-80 hover:opacity-100">
-                            <Brain className="w-3 h-3 text-cyan-400" />
+                            <Brain className="w-3 h-3 text-primary" />
                           </span>
                         )}
                       </div>
                     </button>
                   ) : (
-                    <div className="flex items-center px-2 py-0.5 text-slate-600 text-[10px] italic">
+                    <div className="flex items-center px-2 py-1 text-muted-foreground text-[10px] italic">
                       ...
                     </div>
                   )}
@@ -203,12 +210,15 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
       </div>
 
       {selectedMoveIndex !== null && (
-        <button
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => onSelectMove(null)}
-          className="mt-1.5 w-full py-1 text-[10px] text-cyan-400 hover:text-cyan-300 bg-slate-800/60 rounded text-center"
+          className="mt-2 w-full text-xs text-primary hover:text-white"
         >
           Вернуться к активному ходу ↺
-        </button>
+        </Button>
       )}
     </div>
   );

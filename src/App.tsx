@@ -32,8 +32,10 @@ import { GameOverModal } from './components/GameOverModal/GameOverModal';
 import { HumanChatInput } from './components/HumanChat/HumanChatInput';
 import { buildGameOverSpeechPrompt, getMockGameOverSpeech } from './services/prompts';
 import type { PostGameSpeech } from './types/chess';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
-import { Swords, Trophy } from 'lucide-react';
+import { Swords, Trophy, Settings } from 'lucide-react';
 
 export const App: React.FC = () => {
   const engineRef = useRef<ChessEngineService>(new ChessEngineService());
@@ -63,11 +65,17 @@ export const App: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<LMStudioModel[]>([]);
   const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>(POPULAR_OPENROUTER_MODELS);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [settingsTab, setSettingsTab] = useState<'providers' | 'players' | 'tts' | 'game'>('providers');
   const [mobileTab, setMobileTab] = useState<'board' | 'thinking' | 'history'>('board');
   const [humanComment, setHumanComment] = useState<string>('');
   const [isMobileChatOpen, setIsMobileChatOpen] = useState<boolean>(false);
   const [maxRetries, setMaxRetries] = useState<number>(() => initialSettings?.maxRetries ?? 3);
   const [postMoveDelaySec, setPostMoveDelaySec] = useState<number>(() => initialSettings?.postMoveDelaySec ?? 3);
+
+  const handleOpenSettings = (tab: 'providers' | 'players' | 'tts' | 'game' = 'providers') => {
+    setSettingsTab(tab);
+    setIsSettingsOpen(true);
+  };
 
   const [isInspectingPause, setIsInspectingPause] = useState<boolean>(false);
   const [inspectCountdown, setInspectCountdown] = useState<number | null>(null);
@@ -399,138 +407,130 @@ export const App: React.FC = () => {
           setLastMove({ from: result.thought.from, to: result.thought.to });
           syncGameState();
 
+          if (result.thought.comment) {
+            speechService.speak(result.thought.comment, ttsConfig, playerConfig.style);
+          }
+
           setActiveThinking(prev => ({
             ...prev,
             isStreaming: false,
             isThinking: false
           }));
 
-          // Озвучиваем реплику гроссмейстера через браузерный TTS
-          if (result.thought.comment) {
-            speechService.speak(result.thought.comment, ttsConfig, playerConfig.style);
-          }
-
-          const isOver = engineRef.current.isGameOver();
-
-          if (postMoveDelaySec > 0 && !isOver) {
+          if (postMoveDelaySec > 0 && !engine.isGameOver()) {
             setIsInspectingPause(true);
             setInspectCountdown(postMoveDelaySec);
-            setStatusText(`Ход совершен: ${result.thought.san} (Изучение мыслей)`);
 
-            let remaining = postMoveDelaySec;
+            const startTime = Date.now();
+            const durationMs = postMoveDelaySec * 1000;
+
+            if (pauseIntervalRef.current) clearInterval(pauseIntervalRef.current);
             pauseIntervalRef.current = setInterval(() => {
-              remaining = Math.max(0, +(remaining - 0.1).toFixed(1));
+              const elapsed = Date.now() - startTime;
+              const remaining = Math.max(0, (durationMs - elapsed) / 1000);
               setInspectCountdown(remaining);
+              if (remaining <= 0) {
+                if (pauseIntervalRef.current) clearInterval(pauseIntervalRef.current);
+              }
             }, 100);
 
+            if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
             pauseTimerRef.current = setTimeout(() => {
               if (pauseIntervalRef.current) clearInterval(pauseIntervalRef.current);
               setIsInspectingPause(false);
               setInspectCountdown(null);
-              setStatusText(`Ход совершен: ${result.thought.san}`);
-            }, postMoveDelaySec * 1000);
-          } else {
-            setStatusText(`Ход совершен: ${result.thought.san}`);
+            }, durationMs);
           }
+        } else {
+          setActiveThinking(prev => ({
+            ...prev,
+            isStreaming: false,
+            isThinking: false
+          }));
+          setStatusText(`Ошибка: ${result.error || 'Не удалось получить ход'}`);
         }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('прерван') || msg.includes('aborted')) {
-          setStatusText('Ход отменен.');
+        if ((err as Error)?.name === 'AbortError') {
+          console.log('Ход LLM был отменен.');
         } else {
-          setStatusText(`Ошибка: ${msg}`);
-          sounds.playRetry();
+          console.error('Ошибка выполнения хода LLM:', err);
+          setStatusText('Критическая ошибка хода.');
         }
         setActiveThinking(prev => ({
           ...prev,
           isStreaming: false,
-          isThinking: false,
-          lastError: msg
+          isThinking: false
         }));
       }
     },
-    [whiteConfig, blackConfig, lmStudioBaseUrl, openRouterApiKey, maxRetries, postMoveDelaySec, syncGameState]
+    [whiteConfig, blackConfig, moveThoughts, lmStudioBaseUrl, openRouterApiKey, maxRetries, ttsConfig, syncGameState, postMoveDelaySec]
   );
 
-  const handleHumanMove = (moveInput: { from: Square; to: Square; promotion?: PieceSymbol }) => {
+  const handleHumanMove = useCallback(
+    (move: { from: Square; to: Square; promotion?: PieceSymbol }) => {
+      const engine = engineRef.current;
+      const turnColor = engine.getTurn();
+      const fenBefore = engine.getFen();
+
+      const madeMove = engine.makeMove({ from: move.from, to: move.to, promotion: move.promotion });
+      if (!madeMove) return;
+
+      sounds.playMove();
+
+      const newHistory = engine.getHistory();
+      const lastSan = newHistory[newHistory.length - 1];
+      const fenAfter = engine.getFen();
+      const uci = `${move.from}${move.to}${move.promotion || ''}`;
+
+      const currentTurnNumber = Math.floor((newHistory.length - 1) / 2) + 1;
+
+      const humanThought: MoveThought = {
+        moveNumber: currentTurnNumber,
+        turnNumber: currentTurnNumber,
+        color: turnColor,
+        san: lastSan,
+        uci,
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion,
+        fenBefore,
+        fenAfter,
+        thoughtText: humanComment.trim() ? `Реплика человека: «${humanComment.trim()}»` : 'Ход сделан человеком на доске.',
+        finalMoveRaw: lastSan,
+        comment: humanComment.trim() || undefined,
+        durationMs: 0,
+        tokenCount: 0,
+        timestamp: Date.now(),
+        retries: []
+      };
+
+      setMoveThoughts(prev => [...prev, humanThought]);
+      setLastMove({ from: move.from, to: move.to });
+      setHumanComment('');
+      syncGameState();
+    },
+    [humanComment, syncGameState]
+  );
+
+  useEffect(() => {
+    if (isInspectingPause) return;
     const engine = engineRef.current;
+    if (engine.isGameOver()) return;
+
     const currentTurn = engine.getTurn();
     const currentConfig = currentTurn === 'w' ? whiteConfig : blackConfig;
 
-    if (currentConfig.type !== 'human') return;
-    if (activeThinking.isStreaming || isInspectingPause) return;
-
-    const moveResult = engine.makeMove(moveInput);
-    if (!moveResult) {
-      sounds.playRetry();
-      return;
-    }
-
-    if (moveResult.captured) {
-      sounds.playCapture();
-    } else {
-      sounds.playMove();
-    }
-
-    if (engine.isCheck()) {
-      setTimeout(() => sounds.playCheck(), 100);
-    }
-
-    setLastMove({ from: moveResult.from, to: moveResult.to });
-
-    const userComment = humanComment.trim();
-
-    const humanThought: MoveThought = {
-      moveNumber: engine.getMoveNumber(),
-      turnNumber: Math.floor((engine.getHistory().length - 1) / 2) + 1,
-      color: currentTurn,
-      san: moveResult.san,
-      uci: `${moveResult.from}${moveResult.to}${moveResult.promotion || ''}`,
-      from: moveResult.from,
-      to: moveResult.to,
-      promotion: moveResult.promotion,
-      fenBefore: fen,
-      fenAfter: engine.getFen(),
-      thoughtText: userComment ? `«${userComment}»` : 'Человек сделал свой ход на доске.',
-      comment: userComment || undefined,
-      finalMoveRaw: moveResult.san,
-      durationMs: 0,
-      retries: [],
-      timestamp: Date.now(),
-      captured: moveResult.captured
-    };
-
-    if (userComment) {
-      setHumanComment('');
-      setIsMobileChatOpen(false);
-    }
-
-    setMoveThoughts(prev => [...prev, humanThought]);
-    setSelectedMoveIndex(null);
-    syncGameState();
-  };
-
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (engine.isGameOver()) {
-      setIsAutoPlaying(false);
-      return;
-    }
-
-    const currentTurn = engine.getTurn();
-    const nextConfig = currentTurn === 'w' ? whiteConfig : blackConfig;
-
-    if (nextConfig.type === 'llm' && !activeThinking.isStreaming && !isInspectingPause) {
+    if (currentConfig.type === 'llm') {
       if (gameMode === 'llm_vs_llm') {
         if (isAutoPlaying) {
           autoPlayTimeoutRef.current = setTimeout(() => {
             triggerLlmMove(currentTurn);
-          }, 400);
+          }, 300);
         }
-      } else if (gameMode === 'human_vs_llm') {
+      } else {
         autoPlayTimeoutRef.current = setTimeout(() => {
           triggerLlmMove(currentTurn);
-        }, 300);
+        }, 200);
       }
     }
 
@@ -539,40 +539,26 @@ export const App: React.FC = () => {
         clearTimeout(autoPlayTimeoutRef.current);
       }
     };
-  }, [fen, gameMode, isAutoPlaying, activeThinking.isStreaming, isInspectingPause, whiteConfig, blackConfig, triggerLlmMove]);
+  }, [chessState, gameMode, isAutoPlaying, whiteConfig, blackConfig, isInspectingPause, triggerLlmMove]);
 
   const handleModeChange = (mode: GameMode) => {
     setGameMode(mode);
-    setIsAutoPlaying(false);
     if (mode === 'llm_vs_llm') {
       setWhiteConfig(prev => ({
         ...prev,
         type: 'llm',
-        name: GRANDMASTER_PRESETS[prev.style]?.name || 'Гарри Каспаров'
+        style: 'tal',
+        name: GRANDMASTER_PRESETS.tal.name,
+        avatar: GRANDMASTER_PRESETS.tal.avatar
       }));
-      setBlackConfig(prev => ({
+    } else {
+      setWhiteConfig(prev => ({
         ...prev,
-        type: 'llm',
-        style: prev.style === 'kasparov' ? 'tal' : prev.style,
-        name: GRANDMASTER_PRESETS[prev.style === 'kasparov' ? 'tal' : prev.style]?.name || 'Михаил Таль'
+        type: 'human',
+        name: 'Кожаный Мешок',
+        avatar: '🥊'
       }));
-    } else if (mode === 'human_vs_llm') {
-      setWhiteConfig(prev => {
-        const isPresetName = Object.values(GRANDMASTER_PRESETS).some(p => p.name === prev.name);
-        return {
-          ...prev,
-          type: 'human',
-          name: isPresetName || !prev.name ? 'Кожаный Мешок' : prev.name,
-          avatar: prev.avatar || '🥊',
-          bio: prev.bio || 'Человек с железной волей, решивший доказать превосходство биологического разума над кремнием.'
-        };
-      });
-      setBlackConfig(prev => ({
-        ...prev,
-        type: 'llm',
-        name: GRANDMASTER_PRESETS[prev.style]?.name || 'Гарри Каспаров'
-      }));
-      setBoardOrientation('w');
+      setIsAutoPlaying(false);
     }
   };
 
@@ -580,19 +566,25 @@ export const App: React.FC = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    hasTriggeredSpeechRef.current = false;
-    setPostGameSpeeches([]);
-    setIsGameOverModalOpen(false);
-    setIsGeneratingGameOverSpeech(false);
-    setWinnerColor(null);
-    setHumanComment('');
-    setIsMobileChatOpen(false);
+    if (autoPlayTimeoutRef.current) {
+      clearTimeout(autoPlayTimeoutRef.current);
+    }
+    if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+    if (pauseIntervalRef.current) clearInterval(pauseIntervalRef.current);
+    speechService.stop();
 
+    hasTriggeredSpeechRef.current = false;
     engineRef.current.reset();
     setLastMove(null);
     setMoveThoughts([]);
     setSelectedMoveIndex(null);
     setIsAutoPlaying(false);
+    setIsInspectingPause(false);
+    setInspectCountdown(null);
+    setPostGameSpeeches([]);
+    setIsGameOverModalOpen(false);
+    setIsGeneratingGameOverSpeech(false);
+    setWinnerColor(null);
     setActiveThinking({
       color: 'w',
       thoughtStream: '',
@@ -642,7 +634,8 @@ export const App: React.FC = () => {
   const displayedSavedThought =
     selectedMoveIndex !== null && moveThoughts[selectedMoveIndex] ? moveThoughts[selectedMoveIndex] : null;
 
-  const currentTurn = engineRef.current.getTurn();
+  const currentTurn = chessState.turn() as PieceColor;
+  const isGameOver = chessState.isGameOver();
   const isHumanTurn =
     (currentTurn === 'w' && whiteConfig.type === 'human') || (currentTurn === 'b' && blackConfig.type === 'human');
 
@@ -659,88 +652,166 @@ export const App: React.FC = () => {
       ? GRANDMASTER_PRESETS[whiteConfig.style] || GRANDMASTER_PRESETS.kasparov
       : GRANDMASTER_PRESETS[blackConfig.style] || GRANDMASTER_PRESETS.kasparov;
 
+  // Динамическое определение активных провайдеров нейросетей
+  const activeLlmPlayers = [
+    whiteConfig.type === 'llm' ? { color: 'w' as PieceColor, config: whiteConfig } : null,
+    blackConfig.type === 'llm' ? { color: 'b' as PieceColor, config: blackConfig } : null
+  ].filter(Boolean) as { color: PieceColor; config: PlayerConfig }[];
+
+  const usesOpenRouter = activeLlmPlayers.some(p => p.config.provider === 'openrouter');
+  const usesLmStudio = activeLlmPlayers.some(p => p.config.provider === 'lmstudio' || !p.config.provider);
+
+  const getActiveModelDisplay = () => {
+    if (activeLlmPlayers.length === 0) return 'Human vs Human';
+    if (usesOpenRouter && usesLmStudio) return 'LM Studio + OpenRouter';
+    if (usesOpenRouter) {
+      const openRouterPlayer = activeLlmPlayers.find(p => p.config.provider === 'openrouter');
+      const modelId = openRouterPlayer?.config.modelId || '';
+      const shortName = modelId.includes('/') ? modelId.split('/').pop() : modelId;
+      return shortName || (openRouterApiKey ? `${openRouterModels.length} мод.` : 'Без ключа');
+    }
+    return availableModels.length > 0 ? `${availableModels.length} мод.` : 'Demo';
+  };
+
   return (
-    <div className="app-container">
+    <div className="flex flex-col h-screen w-full max-w-full overflow-hidden p-1.5 sm:p-2.5 gap-1.5 sm:gap-2 select-none">
       {/* Верхний Header */}
-      <header className="header-bar">
+      <header className="flex items-center justify-between px-3 sm:px-4 py-1.5 bg-slate-900/90 border border-border/80 rounded-2xl shadow-xl backdrop-blur-xl h-11 shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-          <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-md text-white shrink-0">
-            <Swords className="w-4 h-4 sm:w-5 sm:h-5" />
+          <div className="p-1.5 rounded-xl bg-gradient-to-br from-primary to-indigo-600 shadow-md shadow-primary/20 text-white shrink-0">
+            <Swords className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-xs sm:text-base font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-cyan-400 bg-clip-text text-transparent truncate">
+            <h1 className="text-xs sm:text-base font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-primary bg-clip-text text-transparent truncate">
               LLM Chess Arena
             </h1>
-            <p className="text-[10px] text-slate-400 hidden sm:block truncate">
-              Гроссмейстерские битвы с визуализацией потока мыслей нейросетей (LM Studio)
+            <p className="text-[10px] text-muted-foreground hidden sm:block truncate">
+              Гроссмейстерские битвы с визуализацией потока сознания нейросетей
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {engineRef.current.isGameOver() && (postGameSpeeches.length > 0 || isGeneratingGameOverSpeech) && (
-            <button
+          {isGameOver && (postGameSpeeches.length > 0 || isGeneratingGameOverSpeech) && (
+            <Button
+              size="sm"
+              variant="amber"
               onClick={() => setIsGameOverModalOpen(true)}
-              className="px-2.5 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer flex items-center gap-1.5 animate-pulse"
+              className="gap-1.5 h-7 text-xs animate-pulse"
             >
               <Trophy className="w-3.5 h-3.5" />
               <span>Последнее слово</span>
+            </Button>
+          )}
+
+          {/* Динамический индикатор провайдера */}
+          {activeLlmPlayers.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => handleOpenSettings('players')}
+              title="Нажмите для настройки игроков"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-border/80 text-xs font-mono text-slate-300 hover:border-slate-600 transition-colors cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+              <span>Человек vs Человек</span>
+            </button>
+          ) : usesOpenRouter && usesLmStudio ? (
+            <button
+              type="button"
+              onClick={() => handleOpenSettings('providers')}
+              title="Белые и Черные используют разные провайдеры (LM Studio + OpenRouter)"
+              className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-border/80 text-xs font-mono hover:border-primary/50 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${availableModels.length > 0 ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400'}`} />
+                <span className="text-cyan-300 font-bold">LM Studio</span>
+              </div>
+              <span className="text-muted-foreground">+</span>
+              <div className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${openRouterApiKey ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+                <span className="text-indigo-300 font-bold">OpenRouter</span>
+              </div>
+            </button>
+          ) : usesOpenRouter ? (
+            <button
+              type="button"
+              onClick={() => handleOpenSettings('providers')}
+              title={`Активный провайдер: OpenRouter (${getActiveModelDisplay()}). Нажмите для настройки.`}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-indigo-500/40 text-xs font-mono hover:border-indigo-400 hover:shadow-cyan-glow transition-all cursor-pointer"
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${openRouterApiKey ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+              <span className="text-slate-300">OpenRouter:</span>
+              <span className="text-indigo-300 font-bold max-w-[140px] truncate font-mono">
+                {getActiveModelDisplay()}
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleOpenSettings('providers')}
+              title={`Активный провайдер: LM Studio (${getActiveModelDisplay()}). Нажмите для настройки.`}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-cyan-500/40 text-xs font-mono hover:border-cyan-400 hover:shadow-cyan-glow transition-all cursor-pointer"
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${availableModels.length > 0 ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400'}`} />
+              <span className="text-slate-300">LM Studio:</span>
+              <span className="text-primary font-bold">
+                {getActiveModelDisplay()}
+              </span>
             </button>
           )}
 
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-            <span className="text-slate-300">LM Studio:</span>
-            <span className="text-cyan-400 font-bold">
-              {availableModels.length > 0 ? `${availableModels.length} мод.` : 'Demo'}
-            </span>
-          </div>
-
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all shadow cursor-pointer shrink-0"
+          <Button
+            size="sm"
+            variant="neon"
+            onClick={() => handleOpenSettings('providers')}
+            className="gap-1.5 h-7 sm:h-8 text-xs"
           >
-            ⚙️ <span className="hidden xs:inline sm:inline">Настройки</span>
-          </button>
+            <Settings className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline sm:inline">Настройки</span>
+          </Button>
         </div>
       </header>
 
       {/* Мобильный переключатель вкладок */}
-      <nav className="mobile-nav-bar">
-        <button
+      <nav className="flex lg:hidden items-center justify-around bg-slate-900/90 border border-border/80 rounded-2xl p-1 shrink-0 backdrop-blur-xl">
+        <Button
           type="button"
+          size="sm"
+          variant={mobileTab === 'board' ? 'default' : 'ghost'}
           onClick={() => setMobileTab('board')}
-          className={`mobile-nav-btn ${mobileTab === 'board' ? 'active' : ''}`}
+          className="flex-1 text-xs h-8"
         >
           <span>♟️ Доска</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
+          size="sm"
+          variant={mobileTab === 'thinking' ? 'neon' : 'ghost'}
           onClick={() => setMobileTab('thinking')}
-          className={`mobile-nav-btn ${mobileTab === 'thinking' ? 'active' : ''}`}
+          className="flex-1 text-xs h-8 gap-1.5"
         >
-          <span className="relative inline-flex items-center gap-1.5">
-            <span>🧠 Мысли LLM</span>
-            {activeThinking.isStreaming && (
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            )}
-          </span>
-        </button>
+          <span>🧠 Мысли LLM</span>
+          {activeThinking.isStreaming && (
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+          )}
+        </Button>
 
-        <button
+        <Button
           type="button"
+          size="sm"
+          variant={mobileTab === 'history' ? 'default' : 'ghost'}
           onClick={() => setMobileTab('history')}
-          className={`mobile-nav-btn ${mobileTab === 'history' ? 'active' : ''}`}
+          className="flex-1 text-xs h-8"
         >
           <span>📜 Ходы ({moveThoughts.length})</span>
-        </button>
+        </Button>
       </nav>
 
       {/* Основная арена: 3 колонки на десктопе, адаптивные вкладки на мобильном */}
-      <main className="main-arena">
+      <main className="grid grid-cols-1 lg:grid-cols-[minmax(320px,1.15fr)_minmax(360px,1.3fr)_minmax(280px,0.85fr)] gap-2 flex-1 min-h-0 overflow-hidden">
         {/* ЛЕВАЯ КОЛОНКА: Инспектор мыслей (Thinking Stream) */}
-        <div className={`col-panel ${mobileTab === 'thinking' ? 'mobile-active' : ''}`}>
+        <div className={`flex flex-col min-h-0 h-full ${mobileTab === 'thinking' ? 'flex' : 'hidden lg:flex'}`}>
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {displayedSavedThought ? (
               <ThinkingSpoiler
@@ -791,7 +862,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: Шахматная доска + Игроки + Управление */}
-        <div className={`col-panel items-center justify-between ${mobileTab === 'board' ? 'mobile-active' : ''}`}>
+        <div className={`flex flex-col items-center justify-between gap-1.5 min-h-0 h-full ${mobileTab === 'board' ? 'flex' : 'hidden lg:flex'}`}>
           {/* Верхний игрок */}
           <div className="w-full">
             <PlayerCard
@@ -811,13 +882,13 @@ export const App: React.FC = () => {
           </div>
 
           {/* Доска + Eval Bar */}
-          <div className="flex items-center justify-center gap-1.5 sm:gap-3 w-full max-w-full my-auto overflow-hidden box-border">
+          <div className="flex items-center justify-center gap-1.5 sm:gap-3 w-full max-w-full my-auto overflow-hidden">
             <EvalBar evaluation={evaluation} isFlipped={boardOrientation === 'b'} />
             <div className="flex-1 min-w-0 flex justify-center overflow-hidden">
               <ChessBoard
                 chess={chessState}
                 boardOrientation={boardOrientation}
-                isInteractive={isHumanTurn && !activeThinking.isStreaming && !engineRef.current.isGameOver()}
+                isInteractive={isHumanTurn && !activeThinking.isStreaming && !isGameOver}
                 onMakeMove={handleHumanMove}
                 lastMove={lastMove}
               />
@@ -846,7 +917,7 @@ export const App: React.FC = () => {
           {activeThinking.isStreaming && (
             <div
               onClick={() => setMobileTab('thinking')}
-              className="lg:hidden w-full px-3 py-1.5 rounded-xl bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 text-xs flex items-center justify-between cursor-pointer shadow-lg animate-pulse"
+              className="lg:hidden w-full px-3 py-1.5 rounded-xl bg-slate-950/90 border border-primary/60 text-primary text-xs flex items-center justify-between cursor-pointer shadow-cyan-glow animate-pulse"
             >
               <div className="flex items-center gap-2 truncate">
                 <span className="animate-spin text-sm">🧠</span>
@@ -855,17 +926,17 @@ export const App: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-1.5 shrink-0 pl-2">
-                <span className="px-1.5 py-0.5 rounded bg-cyan-600 text-white font-mono text-[10px] font-bold">
+                <Badge variant="cyan" className="font-mono text-[10px] py-0 px-1 font-bold">
                   {activeThinking.tokenCount || Math.round(activeThinking.thoughtStream.length / 2.8)} tok
-                </span>
-                <span className="text-[10px] text-cyan-400 font-semibold underline">Мысли →</span>
+                </Badge>
+                <span className="text-[10px] text-primary font-semibold underline">Мысли →</span>
               </div>
             </div>
           )}
 
           {/* Поле ввода реплики человека сопернику */}
           {(gameMode === 'human_vs_llm' || whiteConfig.type === 'human' || blackConfig.type === 'human') &&
-            !engineRef.current.isGameOver() && (
+            !isGameOver && (
               <div className="w-full">
                 <HumanChatInput
                   value={humanComment}
@@ -894,15 +965,15 @@ export const App: React.FC = () => {
               onStepMove={() => triggerLlmMove(currentTurn)}
               onResetGame={handleResetGame}
               onFlipBoard={handleFlipBoard}
-              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenSettings={() => handleOpenSettings('game')}
               isThinking={activeThinking.isStreaming}
-              isGameOver={engineRef.current.isGameOver()}
+              isGameOver={isGameOver}
             />
           </div>
         </div>
 
         {/* ПРАВАЯ КОЛОНКА: История ходов (PGN) и разбор прошлых мыслей */}
-        <div className={`col-panel ${mobileTab === 'history' ? 'mobile-active' : ''}`}>
+        <div className={`flex flex-col min-h-0 h-full ${mobileTab === 'history' ? 'flex' : 'hidden lg:flex'}`}>
           <MoveHistory
             moveThoughts={moveThoughts}
             selectedMoveIndex={selectedMoveIndex}
@@ -913,9 +984,10 @@ export const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Модалка настроек */}
+      {/* Модалка настроек на базе shadcn Dialog */}
       <SettingsModal
         isOpen={isSettingsOpen}
+        initialTab={settingsTab}
         onClose={() => setIsSettingsOpen(false)}
         lmStudioBaseUrl={lmStudioBaseUrl}
         onUpdateBaseUrl={setLmStudioBaseUrl}

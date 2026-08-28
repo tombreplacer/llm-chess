@@ -5,12 +5,26 @@ import { lmStudioService } from '../../services/lmStudioClient';
 import { speechService } from '../../services/speechService';
 import { ModelCombobox } from '../ModelSelector/ModelCombobox';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
   Settings,
   Server,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  X,
   Volume2,
   VolumeX,
   Play,
@@ -23,7 +37,8 @@ import {
   EyeOff,
   ExternalLink,
   Cpu,
-  Zap
+  Zap,
+  Sliders
 } from 'lucide-react';
 
 export const HUMAN_PERSONAS = [
@@ -75,6 +90,7 @@ interface SettingsModalProps {
   onSetAvailableModels: (models: LMStudioModel[]) => void;
   ttsConfig: TtsConfig;
   onUpdateTtsConfig: (config: TtsConfig) => void;
+  initialTab?: 'providers' | 'players' | 'tts' | 'game';
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -97,8 +113,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   availableModels,
   onSetAvailableModels,
   ttsConfig,
-  onUpdateTtsConfig
+  onUpdateTtsConfig,
+  initialTab = 'providers'
 }) => {
+  const [activeTab, setActiveTab] = useState<'providers' | 'players' | 'tts' | 'game'>(initialTab);
   const [activeProviderTab, setActiveProviderTab] = useState<'lmstudio' | 'openrouter'>('lmstudio');
   const [urlInput, setUrlInput] = useState(lmStudioBaseUrl);
   const [apiKeyInput, setApiKeyInput] = useState(openRouterApiKey);
@@ -120,10 +138,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setAvailableVoices(voices);
       setUrlInput(lmStudioBaseUrl);
       setApiKeyInput(openRouterApiKey);
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
     }
-  }, [isOpen, lmStudioBaseUrl, openRouterApiKey]);
-
-  if (!isOpen) return null;
+  }, [isOpen, lmStudioBaseUrl, openRouterApiKey, initialTab]);
 
   const handleTestLmStudio = async () => {
     setIsLoadingModels(true);
@@ -209,54 +228,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const isLocal = (config.provider || 'lmstudio') === 'lmstudio';
 
     return (
-      <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-border/80 space-y-3.5 shadow-sm">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <span
-              className={`w-3 h-3 rounded-full border shadow ${
+              className={`w-3.5 h-3.5 rounded-full border shadow-sm ${
                 isWhite ? 'bg-slate-100 border-slate-300' : 'bg-slate-950 border-slate-700'
               }`}
             />
-            <span className="font-bold text-white text-sm">
-              {isWhite ? 'Игрок за Белых' : 'Игрок за Черных'}
+            <span className="font-bold text-foreground text-xs sm:text-sm">
+              {isWhite ? 'Белые фигуры' : 'Черные фигуры'}
             </span>
           </div>
-          <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
-            {isHuman ? (
-              <User className="w-3.5 h-3.5 text-indigo-400" />
-            ) : (
-              <Bot className="w-3.5 h-3.5 text-cyan-400" />
-            )}
-            <span>{isHuman ? 'Человек' : 'Нейросеть (LLM)'}</span>
-          </span>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant={isHuman ? 'default' : 'secondary'}
+              size="sm"
+              onClick={() => onUpdate({ ...config, type: 'human' })}
+              className="h-7 text-[11px] gap-1 px-2.5"
+            >
+              <User className="w-3 h-3" />
+              <span>Человек</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant={!isHuman ? 'neon' : 'secondary'}
+              size="sm"
+              onClick={() => onUpdate({ ...config, type: 'llm' })}
+              className="h-7 text-[11px] gap-1 px-2.5"
+            >
+              <Bot className="w-3 h-3" />
+              <span>Нейросеть (LLM)</span>
+            </Button>
+          </div>
         </div>
 
         {isHuman ? (
           <div className="space-y-3 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-slate-300 font-medium mb-1">
+              <div className="sm:col-span-2 space-y-1">
+                <label className="text-slate-300 font-medium text-xs">
                   Ваше имя / Никнейм:
                 </label>
-                <input
+                <Input
                   type="text"
                   value={config.name || ''}
                   onChange={e => onUpdate({ ...config, name: e.target.value })}
-                  placeholder="Например: Кожаный Мешок, Александр..."
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                  placeholder="Например: Кожаный Мешок..."
+                  className="bg-slate-950/80 font-sans"
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium text-xs">
                   Аватар:
                 </label>
                 <div className="flex gap-1.5 items-center">
-                  <input
+                  <Input
                     type="text"
                     value={config.avatar || '👤'}
                     onChange={e => onUpdate({ ...config, avatar: e.target.value })}
-                    className="w-10 text-center px-1.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-base focus:outline-none focus:border-cyan-500"
+                    className="w-10 text-center px-1 font-sans text-sm"
                   />
                   <div className="flex gap-1 flex-wrap">
                     {['👤', '🥊', '⚡', '🛡️', '🍺', '👑'].map(emoji => (
@@ -264,10 +299,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={emoji}
                         type="button"
                         onClick={() => onUpdate({ ...config, avatar: emoji })}
-                        className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs transition-all ${
+                        className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs transition-all cursor-pointer ${
                           (config.avatar || '👤') === emoji
-                            ? 'bg-cyan-600/40 border-cyan-400 scale-110 shadow-sm text-sm'
-                            : 'bg-slate-900 border-slate-700/80 hover:bg-slate-800'
+                            ? 'bg-primary/20 border-primary text-primary font-bold scale-110 shadow-sm'
+                            : 'bg-slate-950 border-border/80 hover:bg-slate-800'
                         }`}
                       >
                         {emoji}
@@ -278,12 +313,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-slate-300 font-medium">
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <label className="text-slate-300 font-medium text-xs">
                   Характер и стиль игры (Bio для LLM):
                 </label>
-                <span className="text-[10px] text-cyan-400 font-medium flex items-center gap-1">
+                <span className="text-[10px] text-primary font-medium flex items-center gap-1">
                   <Sparkles className="w-3 h-3" /> Учитывается нейросетью
                 </span>
               </div>
@@ -292,12 +327,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={e => onUpdate({ ...config, bio: e.target.value })}
                 rows={2}
                 placeholder="Опишите свой стиль: например, агрессивный атакующий игрок, люблю тактику, часто зеваю в цейтноте..."
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs transition-colors resize-none"
+                className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary text-xs transition-colors resize-none"
               />
             </div>
 
-            <div>
-              <span className="block text-slate-400 text-[11px] mb-1.5 font-medium">
+            <div className="space-y-1.5">
+              <span className="block text-muted-foreground text-[11px] font-medium">
                 Быстрые шаблоны личности:
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -313,7 +348,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         bio: p.bio
                       })
                     }
-                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-700/70 hover:border-cyan-500/50 text-[11px] text-slate-300 hover:text-white transition-all flex items-center gap-1 shadow-sm"
+                    className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-border text-[11px] text-slate-300 hover:text-white transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                   >
                     <span>{p.avatar}</span>
                     <span>{p.name}</span>
@@ -323,15 +358,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         ) : (
-          <div className="space-y-3 text-xs">
+          <div className="space-y-3.5 text-xs">
             {/* Переключатель провайдера LM Studio / OpenRouter */}
-            <div>
-              <label className="block text-slate-400 mb-1 font-medium">
+            <div className="space-y-1">
+              <label className="text-muted-foreground font-medium text-xs block">
                 Провайдер нейросети:
               </label>
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-700/80">
-                <button
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950 rounded-xl border border-border">
+                <Button
                   type="button"
+                  variant={isLocal ? 'default' : 'ghost'}
+                  size="sm"
                   onClick={() => {
                     const fallbackModel = availableModels[0]?.id || 'mock-ai';
                     onUpdate({
@@ -340,18 +377,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       modelId: config.modelId.includes('/') ? fallbackModel : config.modelId
                     });
                   }}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                    isLocal
-                      ? 'bg-cyan-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
+                  className="h-8 gap-1.5 text-xs"
                 >
                   <Server className="w-3.5 h-3.5" />
                   <span>LM Studio (Локально)</span>
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="button"
+                  variant={!isLocal ? 'neon' : 'ghost'}
+                  size="sm"
                   onClick={() => {
                     onUpdate({
                       ...config,
@@ -362,22 +397,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           : config.modelId
                     });
                   }}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                    !isLocal
-                      ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
+                  className="h-8 gap-1.5 text-xs"
                 >
                   <Globe className="w-3.5 h-3.5" />
                   <span>OpenRouter (Облако)</span>
-                </button>
+                </Button>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Выбор модели с поиском и фильтрами */}
-              <div>
-                <label className="block text-slate-400 mb-1">
+              <div className="space-y-1">
+                <label className="text-muted-foreground font-medium text-xs block">
                   {isLocal ? 'Модель LM Studio:' : 'Модель OpenRouter:'}
                 </label>
                 <ModelCombobox
@@ -401,8 +432,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Стиль гроссмейстера */}
-              <div>
-                <label className="block text-slate-400 mb-1">Стиль гроссмейстера:</label>
+              <div className="space-y-1">
+                <label className="text-muted-foreground font-medium text-xs block">
+                  Стиль гроссмейстера:
+                </label>
                 <select
                   value={config.style}
                   onChange={e => {
@@ -415,7 +448,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       temperature: preset.temperature
                     });
                   }}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                  className="w-full h-9 px-3 rounded-xl bg-slate-950 border border-border text-foreground text-xs focus:outline-none focus:border-primary"
                 >
                   {Object.values(GRANDMASTER_PRESETS).map(p => (
                     <option key={p.id} value={p.id}>
@@ -427,8 +460,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Быстрый выбор топовых моделей OpenRouter */}
               {!isLocal && (
-                <div className="col-span-full">
-                  <span className="block text-slate-400 text-[11px] mb-1">
+                <div className="col-span-full space-y-1">
+                  <span className="block text-muted-foreground text-[11px]">
                     Популярные модели OpenRouter:
                   </span>
                   <div className="flex flex-wrap gap-1">
@@ -445,10 +478,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={m.id}
                         type="button"
                         onClick={() => onUpdate({ ...config, modelId: m.id })}
-                        className={`px-2 py-0.5 rounded-lg border text-[10px] font-mono transition-all ${
+                        className={`px-2 py-0.5 rounded-lg border text-[10px] font-mono transition-all cursor-pointer ${
                           config.modelId === m.id
-                            ? 'bg-cyan-600/40 border-cyan-400 text-cyan-200 shadow-sm'
-                            : 'bg-slate-900 border-slate-750 text-slate-400 hover:text-white hover:bg-slate-850'
+                            ? 'bg-primary/20 border-primary text-primary font-bold shadow-sm'
+                            : 'bg-slate-950 border-border text-muted-foreground hover:text-white hover:bg-slate-800'
                         }`}
                       >
                         {m.label}
@@ -459,36 +492,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
 
               {/* Температура */}
-              <div className="col-span-full">
-                <div className="flex justify-between text-slate-400 mb-1">
-                  <span>Температура рассуждений:</span>
-                  <span className="font-mono text-white font-bold">{config.temperature}</span>
+              <div className="col-span-full space-y-2">
+                <div className="flex justify-between text-muted-foreground text-xs">
+                  <span>Температура рассуждений (Креативность):</span>
+                  <span className="font-mono text-foreground font-bold">{config.temperature}</span>
                 </div>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="1.2"
-                  step="0.05"
-                  value={config.temperature}
-                  onChange={e =>
-                    onUpdate({ ...config, temperature: parseFloat(e.target.value) })
-                  }
-                  className="w-full accent-cyan-500 cursor-pointer"
+                <Slider
+                  min={0.1}
+                  max={1.2}
+                  step={0.05}
+                  value={[config.temperature]}
+                  onValueChange={vals => onUpdate({ ...config, temperature: vals[0] })}
                 />
               </div>
 
               {/* Лимит токенов (Max Tokens) */}
-              <div className="col-span-full">
-                <div className="flex justify-between text-slate-400 mb-1">
+              <div className="col-span-full space-y-1.5">
+                <div className="flex justify-between text-muted-foreground text-xs">
                   <span>Лимит токенов генерации (Max Tokens):</span>
-                  <span className="font-mono text-cyan-400 font-bold">
+                  <span className="font-mono text-primary font-bold">
                     {config.maxTokens === -1 || config.maxTokens === 0 || !config.maxTokens
                       ? '♾️ Безлимит (Максимум модели)'
                       : `${config.maxTokens} токенов`}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5 mb-1">
+                <div className="flex flex-wrap gap-1.5">
                   {[
                     { val: 1024, label: '1 024' },
                     { val: 2048, label: '2 048' },
@@ -507,10 +536,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={item.val}
                         type="button"
                         onClick={() => onUpdate({ ...config, maxTokens: item.val })}
-                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all ${
+                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-cyan-600/40 border-cyan-400 text-cyan-200 font-bold shadow-sm'
-                            : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-white hover:bg-slate-850'
+                            ? 'bg-primary/20 border-primary text-primary font-bold shadow-sm'
+                            : 'bg-slate-950 border-border text-muted-foreground hover:text-white hover:bg-slate-800'
                         }`}
                       >
                         {item.label}
@@ -518,24 +547,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  Для моделей с рассуждениями (DeepSeek R1, QwQ) рекомендуется 4K+ или Безлимит, чтобы мысли не обрезались на полуслове.
+                <p className="text-[10px] text-muted-foreground">
+                  Для моделей с рассуждениями (DeepSeek R1, QwQ) рекомендуется 4K+ или Безлимит.
                 </p>
               </div>
 
               {/* Кастомный промпт */}
-              <div className="col-span-full">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-slate-400">
-                    Дополнительные инструкции для LLM (необязательно):
-                  </label>
-                </div>
+              <div className="col-span-full space-y-1">
+                <label className="text-muted-foreground text-xs block">
+                  Дополнительные инструкции для LLM (необязательно):
+                </label>
                 <textarea
                   value={config.systemPromptCustom || ''}
                   onChange={e => onUpdate({ ...config, systemPromptCustom: e.target.value })}
                   rows={2}
                   placeholder="Например: Стремись к атаке на короля, отвечай дерзко и с сарказмом..."
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs transition-colors resize-none"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary text-xs transition-colors resize-none"
                 />
               </div>
             </div>
@@ -546,350 +573,364 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-dialog">
-        {/* Modal Header */}
-        <div className="modal-header">
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-slate-900 border-border shadow-2xl">
+        {/* Header */}
+        <DialogHeader className="p-4 sm:p-5 border-b border-border/80 bg-slate-950/60 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+            <div className="p-2 rounded-xl bg-primary/20 text-primary border border-primary/30 shrink-0">
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-white text-base">Настройки Нейросетей и Игроков</h2>
-              <p className="text-xs text-slate-400">LM Studio, OpenRouter, стили гроссмейстеров и TTS</p>
+              <DialogTitle className="text-base sm:text-lg font-extrabold text-foreground">
+                Параметры Нейросетей и Игроков
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                LM Studio, OpenRouter, стили гроссмейстеров, Web Speech TTS и партия
+              </DialogDescription>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        </DialogHeader>
+
+        {/* Tab Navigation */}
+        <div className="px-4 sm:px-5 pt-3 shrink-0 border-b border-border/60 bg-slate-950/30">
+          <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)} className="w-full">
+            <TabsList className="grid grid-cols-4 w-full h-9 bg-slate-950 border border-border">
+              <TabsTrigger value="providers" className="text-xs gap-1.5">
+                <Cpu className="w-3.5 h-3.5 hidden sm:inline" />
+                <span>Провайдеры</span>
+              </TabsTrigger>
+              <TabsTrigger value="players" className="text-xs gap-1.5">
+                <User className="w-3.5 h-3.5 hidden sm:inline" />
+                <span>Персоны</span>
+              </TabsTrigger>
+              <TabsTrigger value="tts" className="text-xs gap-1.5">
+                <Volume2 className="w-3.5 h-3.5 hidden sm:inline" />
+                <span>Озвучка</span>
+              </TabsTrigger>
+              <TabsTrigger value="game" className="text-xs gap-1.5">
+                <Sliders className="w-3.5 h-3.5 hidden sm:inline" />
+                <span>Движок</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        {/* Scrollable Body */}
-        <div className="modal-body custom-scrollbar">
-          {/* Секция выбора провайдера подключения: LM Studio или OpenRouter */}
-          <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                <Cpu className="w-4 h-4 text-cyan-400" />
-                <span>Подключение к AI-провайдерам</span>
-              </div>
-            </div>
-
-            {/* Вкладки выбора LM Studio / OpenRouter */}
-            <div className="flex gap-2 border-b border-slate-700/60 pb-3">
-              <button
-                type="button"
-                onClick={() => setActiveProviderTab('lmstudio')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  activeProviderTab === 'lmstudio'
-                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-950'
-                    : 'bg-slate-900 border border-slate-700/80 text-slate-400 hover:text-white'
-                }`}
-              >
-                <Server className="w-3.5 h-3.5" />
-                <span>LM Studio (Локально)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveProviderTab('openrouter')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  activeProviderTab === 'openrouter'
-                    ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-lg shadow-indigo-950'
-                    : 'bg-slate-900 border border-slate-700/80 text-slate-400 hover:text-white'
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>OpenRouter (Облако / API)</span>
-                <span className="px-1.5 py-0.2 rounded bg-indigo-500/30 text-indigo-300 text-[9px] font-bold">
-                  NEW
-                </span>
-              </button>
-            </div>
-
-            {/* Вкладка LM Studio */}
-            {activeProviderTab === 'lmstudio' && (
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={urlInput}
-                    onChange={e => setUrlInput(e.target.value)}
-                    placeholder="http://localhost:1234/v1"
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-cyan-500 transition-colors"
-                  />
-                  <button
-                    onClick={handleTestLmStudio}
-                    disabled={isLoadingModels}
-                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-lg shadow-cyan-900/30"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingModels ? 'animate-spin' : ''}`} />
-                    <span>{isLoadingModels ? 'Проверка...' : 'Обновить модели'}</span>
-                  </button>
+        {/* Scrollable Content Body */}
+        <ScrollArea className="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar">
+          {activeTab === 'providers' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
+                    <Cpu className="w-4 h-4 text-primary" />
+                    <span>Подключение к AI-провайдерам</span>
+                  </div>
                 </div>
 
-                {connectionStatus !== 'idle' && (
-                  <div
-                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
-                      connectionStatus === 'success'
-                        ? 'bg-emerald-950/60 border border-emerald-800/80 text-emerald-300'
-                        : 'bg-rose-950/60 border border-rose-800/80 text-rose-300'
-                    }`}
+                {/* Вкладки выбора LM Studio / OpenRouter */}
+                <div className="flex gap-2 border-b border-border pb-3">
+                  <Button
+                    type="button"
+                    variant={activeProviderTab === 'lmstudio' ? 'default' : 'secondary'}
+                    size="sm"
+                    onClick={() => setActiveProviderTab('lmstudio')}
+                    className="gap-2 text-xs"
                   >
-                    {connectionStatus === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    )}
-                    <span>{statusMessage}</span>
-                  </div>
-                )}
-              </div>
-            )}
+                    <Server className="w-3.5 h-3.5" />
+                    <span>LM Studio (Локально)</span>
+                  </Button>
 
-            {/* Вкладка OpenRouter */}
-            {activeProviderTab === 'openrouter' && (
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs text-slate-300 font-medium flex items-center gap-1">
-                      <Key className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>OpenRouter API Key:</span>
-                    </label>
-                    <a
-                      href="https://openrouter.ai/keys"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 underline underline-offset-2"
-                    >
-                      <span>Получить API-ключ</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
+                  <Button
+                    type="button"
+                    variant={activeProviderTab === 'openrouter' ? 'neon' : 'secondary'}
+                    size="sm"
+                    onClick={() => setActiveProviderTab('openrouter')}
+                    className="gap-2 text-xs"
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>OpenRouter (Облако / API)</span>
+                    <Badge variant="cyan" className="text-[9px] py-0 px-1 font-bold">
+                      NEW
+                    </Badge>
+                  </Button>
+                </div>
 
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type={showApiKey ? 'text' : 'password'}
-                        value={apiKeyInput}
-                        onChange={e => {
-                          setApiKeyInput(e.target.value);
-                          onUpdateOpenRouterApiKey(e.target.value.trim());
-                        }}
-                        placeholder="sk-or-v1-..."
-                        className="w-full pl-3.5 pr-10 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-cyan-500 transition-colors"
+                {/* Вкладка LM Studio */}
+                {activeProviderTab === 'lmstudio' && (
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={urlInput}
+                        onChange={e => setUrlInput(e.target.value)}
+                        placeholder="http://localhost:1234/v1"
+                        className="flex-1"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowApiKey(prev => !prev)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      <Button
+                        onClick={handleTestLmStudio}
+                        disabled={isLoadingModels}
+                        className="shrink-0 gap-1.5"
                       >
-                        {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
+                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingModels ? 'animate-spin' : ''}`} />
+                        <span>{isLoadingModels ? 'Проверка...' : 'Обновить'}</span>
+                      </Button>
                     </div>
 
-                    <button
-                      onClick={handleTestOpenRouter}
-                      disabled={isOpenRouterLoading}
-                      className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:bg-slate-700 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-950/40"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isOpenRouterLoading ? 'animate-spin' : ''}`} />
-                      <span>{isOpenRouterLoading ? 'Загрузка...' : 'Проверить и обновить'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 flex items-start gap-2">
-                  <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <span>
-                    OpenRouter открывает доступ к DeepSeek R1, Claude 3.7, GPT-4o, Gemini 2.0 и бесплатным моделям (Free tier). Ключ сохраняется в вашем браузере.
-                  </span>
-                </div>
-
-                {openRouterStatus !== 'idle' && (
-                  <div
-                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
-                      openRouterStatus === 'success'
-                        ? 'bg-emerald-950/60 border border-emerald-800/80 text-emerald-300'
-                        : 'bg-rose-950/60 border border-rose-800/80 text-rose-300'
-                    }`}
-                  >
-                    {openRouterStatus === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    {connectionStatus !== 'idle' && (
+                      <div
+                        className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                          connectionStatus === 'success'
+                            ? 'bg-emerald-950/60 border border-emerald-800/80 text-emerald-300'
+                            : 'bg-rose-950/60 border border-rose-800/80 text-rose-300'
+                        }`}
+                      >
+                        {connectionStatus === 'success' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        )}
+                        <span>{statusMessage}</span>
+                      </div>
                     )}
-                    <span>{openRouterStatusMsg}</span>
+                  </div>
+                )}
+
+                {/* Вкладка OpenRouter */}
+                {activeProviderTab === 'openrouter' && (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs text-slate-300 font-medium flex items-center gap-1">
+                          <Key className="w-3.5 h-3.5 text-primary" />
+                          <span>OpenRouter API Key:</span>
+                        </label>
+                        <a
+                          href="https://openrouter.ai/keys"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                        >
+                          <span>Получить API-ключ</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={apiKeyInput}
+                            onChange={e => {
+                              setApiKeyInput(e.target.value);
+                              onUpdateOpenRouterApiKey(e.target.value.trim());
+                            }}
+                            placeholder="sk-or-v1-..."
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(prev => !prev)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white cursor-pointer"
+                          >
+                            {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+
+                        <Button
+                          onClick={handleTestOpenRouter}
+                          disabled={isOpenRouterLoading}
+                          variant="neon"
+                          className="shrink-0 gap-1.5"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isOpenRouterLoading ? 'animate-spin' : ''}`} />
+                          <span>{isOpenRouterLoading ? 'Загрузка...' : 'Проверить'}</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-muted-foreground bg-slate-900/60 p-2.5 rounded-xl border border-border flex items-start gap-2">
+                      <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        OpenRouter открывает доступ к DeepSeek R1, Claude 3.7, GPT-4o, Gemini 2.0 и бесплатным моделям (Free tier).
+                      </span>
+                    </div>
+
+                    {openRouterStatus !== 'idle' && (
+                      <div
+                        className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                          openRouterStatus === 'success'
+                            ? 'bg-emerald-950/60 border border-emerald-800/80 text-emerald-300'
+                            : 'bg-rose-950/60 border border-rose-800/80 text-rose-300'
+                        }`}
+                      >
+                        {openRouterStatus === 'success' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        )}
+                        <span>{openRouterStatusMsg}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Игрок 1 (Белые) */}
-          {renderPlayerSection(whiteConfig, onUpdateWhiteConfig, true)}
-
-          {/* Игрок 2 (Черные) */}
-          {renderPlayerSection(blackConfig, onUpdateBlackConfig, false)}
-
-          {/* Секция: Озвучка реплик (TTS) */}
-          <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {ttsConfig.enabled ? (
-                  <Volume2 className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <VolumeX className="w-4 h-4 text-slate-500" />
-                )}
-                <div>
-                  <span className="text-white font-semibold text-sm block">Озвучка реплик (Web Speech TTS)</span>
-                  <span className="text-slate-400 text-xs">
-                    Гроссмейстеры зачитывают свои реплики и трэшток вслух
-                  </span>
-                </div>
-              </div>
-
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={ttsConfig.enabled}
-                  onChange={e => onUpdateTtsConfig({ ...ttsConfig, enabled: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
             </div>
+          )}
 
-            {ttsConfig.enabled && (
-              <div className="space-y-3 pt-2 border-t border-slate-700/50 text-xs">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-slate-300 font-medium">Системный голос:</label>
-                    <button
-                      type="button"
-                      onClick={handleTestTts}
-                      className="px-2.5 py-1 bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/40 rounded-lg flex items-center gap-1 font-semibold transition-colors"
-                    >
-                      <Play className="w-3 h-3" />
-                      <span>Тест голоса</span>
-                    </button>
+          {activeTab === 'players' && (
+            <div className="space-y-4">
+              {renderPlayerSection(whiteConfig, onUpdateWhiteConfig, true)}
+              {renderPlayerSection(blackConfig, onUpdateBlackConfig, false)}
+            </div>
+          )}
+
+          {activeTab === 'tts' && (
+            <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  {ttsConfig.enabled ? (
+                    <Volume2 className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <VolumeX className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  <div>
+                    <span className="text-foreground font-bold text-sm block">
+                      Озвучка реплик (Web Speech TTS)
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      Гроссмейстеры зачитывают свои реплики и трэшток вслух
+                    </span>
                   </div>
+                </div>
+
+                <Switch
+                  checked={ttsConfig.enabled}
+                  onCheckedChange={checked => onUpdateTtsConfig({ ...ttsConfig, enabled: checked })}
+                />
+              </div>
+
+              {ttsConfig.enabled && (
+                <div className="space-y-3.5 pt-3 border-t border-border text-xs">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-slate-300 font-medium">Системный голос:</label>
+                      <Button
+                        type="button"
+                        variant="neon"
+                        size="sm"
+                        onClick={handleTestTts}
+                        className="h-7 text-xs gap-1"
+                      >
+                        <Play className="w-3 h-3" />
+                        <span>Тест голоса</span>
+                      </Button>
+                    </div>
+                    <select
+                      value={ttsConfig.voiceURI}
+                      onChange={e => onUpdateTtsConfig({ ...ttsConfig, voiceURI: e.target.value })}
+                      className="w-full h-9 px-3 rounded-xl bg-slate-900 border border-border text-foreground text-xs focus:outline-none focus:border-primary"
+                    >
+                      <option value="">По умолчанию (системный голос браузера)</option>
+                      {availableVoices.map(v => (
+                        <option key={v.voiceURI} value={v.voiceURI}>
+                          {v.name} ({v.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Скорость речи:</span>
+                        <span className="font-mono text-foreground font-bold">{ttsConfig.rate}x</span>
+                      </div>
+                      <Slider
+                        min={0.5}
+                        max={1.5}
+                        step={0.1}
+                        value={[ttsConfig.rate]}
+                        onValueChange={vals => onUpdateTtsConfig({ ...ttsConfig, rate: vals[0] })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Высота тона:</span>
+                        <span className="font-mono text-foreground font-bold">{ttsConfig.pitch}</span>
+                      </div>
+                      <Slider
+                        min={0.5}
+                        max={1.5}
+                        step={0.1}
+                        value={[ttsConfig.pitch]}
+                        onValueChange={vals => onUpdateTtsConfig({ ...ttsConfig, pitch: vals[0] })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'game' && (
+            <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-4 text-xs">
+              <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-primary" />
+                <span>Параметры движка и партии</span>
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-slate-300 font-medium">
+                    <span>Пауза после хода (чтение мыслей):</span>
+                    <span className="font-mono text-primary font-bold">
+                      {postMoveDelaySec === 0 ? 'Без паузы' : `${postMoveDelaySec} сек`}
+                    </span>
+                  </div>
+                  <Slider
+                    min={0}
+                    max={10}
+                    step={1}
+                    value={[postMoveDelaySec]}
+                    onValueChange={vals => onUpdatePostMoveDelay(vals[0])}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Дает время прочитать мысли гроссмейстера перед следующим ходом.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-medium block">
+                    Лимит попыток на исправление нелегального хода:
+                  </label>
                   <select
-                    value={ttsConfig.voiceURI}
-                    onChange={e => onUpdateTtsConfig({ ...ttsConfig, voiceURI: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
+                    value={maxRetries}
+                    onChange={e => onUpdateMaxRetries(parseInt(e.target.value))}
+                    className="w-full h-9 px-3 rounded-xl bg-slate-900 border border-border text-foreground text-xs focus:outline-none focus:border-primary"
                   >
-                    <option value="">По умолчанию (системный голос браузера)</option>
-                    {availableVoices.map(v => (
-                      <option key={v.voiceURI} value={v.voiceURI}>
-                        {v.name} ({v.lang})
-                      </option>
-                    ))}
+                    <option value="1">1 попытка (без повторов)</option>
+                    <option value="2">2 попытки</option>
+                    <option value="3">3 попытки (рекомендуется)</option>
+                    <option value="5">5 попыток</option>
                   </select>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex justify-between text-slate-400 mb-1">
-                      <span>Скорость речи:</span>
-                      <span className="font-mono text-white font-bold">{ttsConfig.rate}x</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="1.5"
-                      step="0.1"
-                      value={ttsConfig.rate}
-                      onChange={e =>
-                        onUpdateTtsConfig({ ...ttsConfig, rate: parseFloat(e.target.value) })
-                      }
-                      className="w-full accent-cyan-500 cursor-pointer"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-slate-400 mb-1">
-                      <span>Высота тона:</span>
-                      <span className="font-mono text-white font-bold">{ttsConfig.pitch}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="1.5"
-                      step="0.1"
-                      value={ttsConfig.pitch}
-                      onChange={e =>
-                        onUpdateTtsConfig({ ...ttsConfig, pitch: parseFloat(e.target.value) })
-                      }
-                      className="w-full accent-cyan-500 cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Дополнительные параметры партии */}
-          <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-4">
-            <h3 className="font-bold text-white text-sm">Параметры партии и повторов</h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <div className="flex justify-between text-slate-300 font-medium mb-1">
-                  <span>Пауза после хода (изучение мыслей):</span>
-                  <span className="font-mono text-cyan-400 font-bold">
-                    {postMoveDelaySec === 0 ? 'Без паузы' : `${postMoveDelaySec} сек`}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="1"
-                  value={postMoveDelaySec}
-                  onChange={e => onUpdatePostMoveDelay(parseInt(e.target.value))}
-                  className="w-full accent-cyan-500 cursor-pointer"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Дает время прочитать мысли гроссмейстера перед ответным ходом
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">
-                  Лимит попыток на исправление нелегального хода:
-                </label>
-                <select
-                  value={maxRetries}
-                  onChange={e => onUpdateMaxRetries(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white"
-                >
-                  <option value="1">1 попытка (без повторов)</option>
-                  <option value="2">2 попытки</option>
-                  <option value="3">3 попытки (рекомендуется)</option>
-                  <option value="5">5 попыток</option>
-                </select>
               </div>
             </div>
-          </div>
-        </div>
+          )}
+        </ScrollArea>
 
-        {/* Modal Footer */}
-        <div className="modal-footer">
-          <span className="text-[11px] text-slate-400">
+        {/* Footer */}
+        <DialogFooter className="p-4 border-t border-border/80 bg-slate-950/60 shrink-0 flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">
             ✓ Все настройки сохраняются автоматически в браузере
           </span>
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-cyan-900/40 cursor-pointer"
-          >
+          <Button onClick={onClose} variant="default" className="w-full sm:w-auto">
             Готово
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
