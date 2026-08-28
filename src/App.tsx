@@ -72,11 +72,11 @@ export const App: React.FC = () => {
   const initChessEngine = () => {
     const engine = new ChessEngineService();
     if (initialGame?.pgn) {
-      const success = engine.loadPgn(initialGame.pgn);
-      if (!success && initialGame.fen) {
-        engine.reset(initialGame.fen);
-      }
-    } else if (initialGame?.fen) {
+      try {
+        engine.loadPgn(initialGame.pgn);
+      } catch {}
+    }
+    if (initialGame?.fen && engine.getFen() !== initialGame.fen) {
       engine.reset(initialGame.fen);
     }
     return engine;
@@ -225,6 +225,35 @@ export const App: React.FC = () => {
       console.error('Ошибка автосохранения игры:', err);
     }
   }, [fen, pgn, moveThoughts, lastMove, gameStatus, winnerColor, postGameSpeeches, humanComment, statusText]);
+
+  // Сохранение при закрытии/перезагрузке (F5 / beforeunload)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        const engine = engineRef.current;
+        const currentFen = engine.getFen();
+        if (moveThoughts.length > 0 || currentFen !== 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1') {
+          const gameState: SavedGameState = {
+            fen: currentFen,
+            pgn: engine.getPgn(),
+            moveThoughts,
+            lastMove,
+            gameStatus,
+            winnerColor,
+            postGameSpeeches,
+            humanComment,
+            statusText
+          };
+          localStorage.setItem('llm_chess_arena_game_v1', JSON.stringify(gameState));
+        }
+      } catch {}
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [moveThoughts, lastMove, gameStatus, winnerColor, postGameSpeeches, humanComment, statusText]);
 
   const triggerGameOverSpeeches = useCallback(
     async (status: GameStatus) => {
@@ -461,8 +490,29 @@ export const App: React.FC = () => {
         });
 
         if (result.success && result.thought) {
-          setMoveThoughts(prev => [...prev, result.thought]);
-          setLastMove({ from: result.thought.from, to: result.thought.to });
+          const nextThoughts = [...moveThoughts, result.thought];
+          const nextLastMove = { from: result.thought.from, to: result.thought.to };
+          setMoveThoughts(nextThoughts);
+          setLastMove(nextLastMove);
+
+          // Мгновенная синхронная запись в localStorage
+          try {
+            const gameState: SavedGameState = {
+              fen: engine.getFen(),
+              pgn: engine.getPgn(),
+              moveThoughts: nextThoughts,
+              lastMove: nextLastMove,
+              gameStatus: engine.getGameStatus(),
+              winnerColor,
+              postGameSpeeches,
+              humanComment,
+              statusText: `Ход ${result.thought.san} (${playerConfig.name})`
+            };
+            localStorage.setItem('llm_chess_arena_game_v1', JSON.stringify(gameState));
+          } catch (err) {
+            console.error('Ошибка сохранения хода LLM:', err);
+          }
+
           syncGameState();
 
           if (result.thought.comment) {
@@ -521,7 +571,7 @@ export const App: React.FC = () => {
         }));
       }
     },
-    [whiteConfig, blackConfig, moveThoughts, lmStudioBaseUrl, openRouterApiKey, maxRetries, ttsConfig, syncGameState, postMoveDelaySec]
+    [whiteConfig, blackConfig, moveThoughts, lmStudioBaseUrl, openRouterApiKey, maxRetries, ttsConfig, syncGameState, postMoveDelaySec, winnerColor, postGameSpeeches, humanComment]
   );
 
   const handleHumanMove = useCallback(
@@ -562,12 +612,33 @@ export const App: React.FC = () => {
         retries: []
       };
 
-      setMoveThoughts(prev => [...prev, humanThought]);
-      setLastMove({ from: move.from, to: move.to });
+      const nextThoughts = [...moveThoughts, humanThought];
+      const nextLastMove = { from: move.from, to: move.to };
+      setMoveThoughts(nextThoughts);
+      setLastMove(nextLastMove);
       setHumanComment('');
+
+      // Мгновенная синхронная запись в localStorage
+      try {
+        const gameState: SavedGameState = {
+          fen: fenAfter,
+          pgn: engine.getPgn(),
+          moveThoughts: nextThoughts,
+          lastMove: nextLastMove,
+          gameStatus: engine.getGameStatus(),
+          winnerColor: null,
+          postGameSpeeches,
+          humanComment: '',
+          statusText: `Ход ${lastSan} сделан человеком.`
+        };
+        localStorage.setItem('llm_chess_arena_game_v1', JSON.stringify(gameState));
+      } catch (err) {
+        console.error('Ошибка сохранения:', err);
+      }
+
       syncGameState();
     },
-    [humanComment, syncGameState]
+    [humanComment, moveThoughts, postGameSpeeches, syncGameState]
   );
 
   useEffect(() => {
