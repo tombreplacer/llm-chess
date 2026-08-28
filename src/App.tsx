@@ -29,6 +29,7 @@ import { MoveHistory } from './components/MoveHistory/MoveHistory';
 import { GameControls } from './components/GameControls/GameControls';
 import { SettingsModal } from './components/SettingsModal/SettingsModal';
 import { GameOverModal } from './components/GameOverModal/GameOverModal';
+import { HumanChatInput } from './components/HumanChat/HumanChatInput';
 import { buildGameOverSpeechPrompt, getMockGameOverSpeech } from './services/prompts';
 import type { PostGameSpeech } from './types/chess';
 
@@ -63,6 +64,8 @@ export const App: React.FC = () => {
   const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>(POPULAR_OPENROUTER_MODELS);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [mobileTab, setMobileTab] = useState<'board' | 'thinking' | 'history'>('board');
+  const [humanComment, setHumanComment] = useState<string>('');
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState<boolean>(false);
   const [maxRetries, setMaxRetries] = useState<number>(() => initialSettings?.maxRetries ?? 3);
   const [postMoveDelaySec, setPostMoveDelaySec] = useState<number>(() => initialSettings?.postMoveDelaySec ?? 3);
 
@@ -475,6 +478,8 @@ export const App: React.FC = () => {
 
     setLastMove({ from: moveResult.from, to: moveResult.to });
 
+    const userComment = humanComment.trim();
+
     const humanThought: MoveThought = {
       moveNumber: engine.getMoveNumber(),
       turnNumber: Math.floor((engine.getHistory().length - 1) / 2) + 1,
@@ -486,13 +491,19 @@ export const App: React.FC = () => {
       promotion: moveResult.promotion,
       fenBefore: fen,
       fenAfter: engine.getFen(),
-      thoughtText: 'Человек сделал свой ход на доске.',
+      thoughtText: userComment ? `«${userComment}»` : 'Человек сделал свой ход на доске.',
+      comment: userComment || undefined,
       finalMoveRaw: moveResult.san,
       durationMs: 0,
       retries: [],
       timestamp: Date.now(),
       captured: moveResult.captured
     };
+
+    if (userComment) {
+      setHumanComment('');
+      setIsMobileChatOpen(false);
+    }
 
     setMoveThoughts(prev => [...prev, humanThought]);
     setSelectedMoveIndex(null);
@@ -574,6 +585,8 @@ export const App: React.FC = () => {
     setIsGameOverModalOpen(false);
     setIsGeneratingGameOverSpeech(false);
     setWinnerColor(null);
+    setHumanComment('');
+    setIsMobileChatOpen(false);
 
     engineRef.current.reset();
     setLastMove(null);
@@ -849,6 +862,27 @@ export const App: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Поле ввода реплики человека сопернику */}
+          {(gameMode === 'human_vs_llm' || whiteConfig.type === 'human' || blackConfig.type === 'human') &&
+            !engineRef.current.isGameOver() && (
+              <div className="w-full">
+                <HumanChatInput
+                  value={humanComment}
+                  onChange={setHumanComment}
+                  opponentName={
+                    (boardOrientation === 'w' ? blackConfig : whiteConfig).type === 'human'
+                      ? (boardOrientation === 'w' ? blackConfig : whiteConfig).name || 'Человек'
+                      : GRANDMASTER_PRESETS[(boardOrientation === 'w' ? blackConfig : whiteConfig).style]?.name ||
+                        'LLM'
+                  }
+                  opponentStyle={(boardOrientation === 'w' ? blackConfig : whiteConfig).style}
+                  disabled={activeThinking.isStreaming}
+                  isMobileOpen={isMobileChatOpen}
+                  onToggleMobile={setIsMobileChatOpen}
+                />
+              </div>
+            )}
 
           {/* Панель управления */}
           <div className="w-full">
