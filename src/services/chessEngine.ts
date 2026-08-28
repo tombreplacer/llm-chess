@@ -26,6 +26,15 @@ export class ChessEngineService {
     }
   }
 
+  public loadPgn(pgn: string): boolean {
+    try {
+      this.chess.loadPgn(pgn);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   public getChess(): Chess {
     return this.chess;
   }

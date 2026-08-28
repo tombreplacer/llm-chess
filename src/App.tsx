@@ -37,14 +37,26 @@ import { Badge } from '@/components/ui/badge';
 
 import { Swords, Trophy, Settings } from 'lucide-react';
 
+interface SavedGameState {
+  fen: string;
+  pgn: string;
+  moveThoughts: MoveThought[];
+  lastMove: { from: Square; to: Square } | null;
+  gameStatus: GameStatus;
+  winnerColor: 'w' | 'b' | null;
+  postGameSpeeches: PostGameSpeech[];
+  humanComment: string;
+  statusText: string;
+}
+
 export const App: React.FC = () => {
-  const engineRef = useRef<ChessEngineService>(new ChessEngineService());
-  const [chessState, setChessState] = useState<Chess>(() => new Chess());
-  const [fen, setFen] = useState<string>(() => engineRef.current.getFen());
-  const [pgn, setPgn] = useState<string>(() => engineRef.current.getPgn());
-  const [evaluation, setEvaluation] = useState<GameEvaluation>(() => engineRef.current.getEvaluation());
-  const [gameStatus, setGameStatus] = useState<GameStatus>('playing');
-  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
+  const getSavedGame = (): SavedGameState | null => {
+    try {
+      const data = localStorage.getItem('llm_chess_arena_game_v1');
+      if (data) return JSON.parse(data);
+    } catch {}
+    return null;
+  };
 
   const getSavedSettings = () => {
     try {
@@ -54,7 +66,29 @@ export const App: React.FC = () => {
     return null;
   };
 
+  const initialGame = getSavedGame();
   const initialSettings = getSavedSettings();
+
+  const initChessEngine = () => {
+    const engine = new ChessEngineService();
+    if (initialGame?.pgn) {
+      const success = engine.loadPgn(initialGame.pgn);
+      if (!success && initialGame.fen) {
+        engine.reset(initialGame.fen);
+      }
+    } else if (initialGame?.fen) {
+      engine.reset(initialGame.fen);
+    }
+    return engine;
+  };
+
+  const engineRef = useRef<ChessEngineService>(initChessEngine());
+  const [chessState, setChessState] = useState<Chess>(() => new Chess(engineRef.current.getFen()));
+  const [fen, setFen] = useState<string>(() => engineRef.current.getFen());
+  const [pgn, setPgn] = useState<string>(() => engineRef.current.getPgn());
+  const [evaluation, setEvaluation] = useState<GameEvaluation>(() => engineRef.current.getEvaluation());
+  const [gameStatus, setGameStatus] = useState<GameStatus>(() => initialGame?.gameStatus || 'playing');
+  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(() => initialGame?.lastMove || null);
 
   const [gameMode, setGameMode] = useState<GameMode>(() => initialSettings?.gameMode || 'human_vs_llm');
   const [boardOrientation, setBoardOrientation] = useState<PieceColor>(() => initialSettings?.boardOrientation || 'w');
@@ -67,7 +101,7 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [settingsTab, setSettingsTab] = useState<'providers' | 'players' | 'tts' | 'game'>('providers');
   const [mobileTab, setMobileTab] = useState<'board' | 'thinking' | 'history'>('board');
-  const [humanComment, setHumanComment] = useState<string>('');
+  const [humanComment, setHumanComment] = useState<string>(() => initialGame?.humanComment || '');
   const [isMobileChatOpen, setIsMobileChatOpen] = useState<boolean>(false);
   const [maxRetries, setMaxRetries] = useState<number>(() => initialSettings?.maxRetries ?? 3);
   const [postMoveDelaySec, setPostMoveDelaySec] = useState<number>(() => initialSettings?.postMoveDelaySec ?? 3);
@@ -144,7 +178,7 @@ export const App: React.FC = () => {
     } catch {}
   }, [gameMode, boardOrientation, lmStudioBaseUrl, openRouterApiKey, maxRetries, postMoveDelaySec, whiteConfig, blackConfig, ttsConfig]);
 
-  const [moveThoughts, setMoveThoughts] = useState<MoveThought[]>([]);
+  const [moveThoughts, setMoveThoughts] = useState<MoveThought[]>(() => initialGame?.moveThoughts || []);
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number | null>(null);
 
   const [activeThinking, setActiveThinking] = useState<ActiveThinkingState>({
@@ -158,15 +192,39 @@ export const App: React.FC = () => {
     startTime: 0,
     currentAttempt: 1
   });
-  const [statusText, setStatusText] = useState<string>('Ожидание первого хода...');
+  const [statusText, setStatusText] = useState<string>(
+    () => initialGame?.statusText || (initialGame?.moveThoughts?.length ? 'Партия восстановлена из памяти' : 'Ожидание первого хода...')
+  );
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const autoPlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [postGameSpeeches, setPostGameSpeeches] = useState<PostGameSpeech[]>([]);
+  const [postGameSpeeches, setPostGameSpeeches] = useState<PostGameSpeech[]>(() => initialGame?.postGameSpeeches || []);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState<boolean>(false);
   const [isGeneratingGameOverSpeech, setIsGeneratingGameOverSpeech] = useState<boolean>(false);
-  const [winnerColor, setWinnerColor] = useState<'w' | 'b' | null>(null);
-  const hasTriggeredSpeechRef = useRef<boolean>(false);
+  const [winnerColor, setWinnerColor] = useState<'w' | 'b' | null>(() => initialGame?.winnerColor || null);
+  const hasTriggeredSpeechRef = useRef<boolean>(Boolean(initialGame?.postGameSpeeches?.length));
+
+  // Автосохранение всего состояния партии в localStorage
+  useEffect(() => {
+    try {
+      if (moveThoughts.length > 0 || fen !== 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1') {
+        const gameState: SavedGameState = {
+          fen,
+          pgn,
+          moveThoughts,
+          lastMove,
+          gameStatus,
+          winnerColor,
+          postGameSpeeches,
+          humanComment,
+          statusText
+        };
+        localStorage.setItem('llm_chess_arena_game_v1', JSON.stringify(gameState));
+      }
+    } catch (err) {
+      console.error('Ошибка автосохранения игры:', err);
+    }
+  }, [fen, pgn, moveThoughts, lastMove, gameStatus, winnerColor, postGameSpeeches, humanComment, statusText]);
 
   const triggerGameOverSpeeches = useCallback(
     async (status: GameStatus) => {
@@ -572,6 +630,10 @@ export const App: React.FC = () => {
     if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
     if (pauseIntervalRef.current) clearInterval(pauseIntervalRef.current);
     speechService.stop();
+
+    try {
+      localStorage.removeItem('llm_chess_arena_game_v1');
+    } catch {}
 
     hasTriggeredSpeechRef.current = false;
     engineRef.current.reset();
