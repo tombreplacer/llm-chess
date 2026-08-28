@@ -580,6 +580,82 @@ export class LMStudioClient {
       durationMs: mockDurationMs
     };
   }
+
+  public async generateGameOverSpeech(options: {
+    provider?: LlmProvider;
+    baseUrl?: string;
+    apiKey?: string;
+    modelId: string;
+    systemPrompt: string;
+    userPrompt: string;
+    temperature?: number;
+    abortSignal?: AbortSignal;
+  }): Promise<string> {
+    const {
+      provider = 'lmstudio',
+      baseUrl = this.defaultBaseUrl,
+      apiKey,
+      modelId,
+      systemPrompt,
+      userPrompt,
+      temperature = 0.7,
+      abortSignal
+    } = options;
+
+    const isLocal = provider === 'lmstudio';
+    const endpoint = isLocal
+      ? `${baseUrl.replace(/\/+$/, '')}/chat/completions`
+      : 'https://openrouter.ai/api/v1/chat/completions';
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    if (!isLocal) {
+      if (!apiKey) {
+        throw new Error('Для генерации речи через OpenRouter требуется API-ключ.');
+      }
+      headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+      headers['HTTP-Referer'] = window.location.origin || 'https://llm-chess-arena.local';
+      headers['X-Title'] = 'LLM Chess Arena';
+    }
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    const body: Record<string, any> = {
+      model: modelId,
+      messages,
+      temperature,
+      max_tokens: 1024,
+      stream: false
+    };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: abortSignal
+    });
+
+    if (!response.ok) {
+      const err = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}: ${err}`);
+    }
+
+    const data = await response.json();
+    let content = data.choices?.[0]?.message?.content || '';
+
+    // Очищаем от возможных <think> и тегов
+    content = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    content = content.replace(/<comment>([\s\S]*?)<\/comment>/gi, '$1').trim();
+    content = content.replace(/<move>[\s\S]*?<\/move>/gi, '').trim();
+    content = content.replace(/^["'«]|["'»]$/g, '').trim();
+
+    return content;
+  }
 }
 
 export const lmStudioService = new LMStudioClient();

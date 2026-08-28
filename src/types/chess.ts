@@ -131,3 +131,13 @@ export interface ActiveThinkingState {
   currentAttempt: number;
   lastError?: string;
 }
+
+export interface PostGameSpeech {
+  speakerName: string;
+  avatar: string;
+  color: PieceColor;
+  outcome: 'win' | 'loss' | 'draw';
+  style: GrandmasterStyle;
+  speechText: string;
+  timestamp: number;
+}

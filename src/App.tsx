@@ -28,8 +28,11 @@ import { EvalBar } from './components/EvalBar/EvalBar';
 import { MoveHistory } from './components/MoveHistory/MoveHistory';
 import { GameControls } from './components/GameControls/GameControls';
 import { SettingsModal } from './components/SettingsModal/SettingsModal';
+import { GameOverModal } from './components/GameOverModal/GameOverModal';
+import { buildGameOverSpeechPrompt, getMockGameOverSpeech } from './services/prompts';
+import type { PostGameSpeech } from './types/chess';
 
-import { Swords, Trophy, RotateCcw } from 'lucide-react';
+import { Swords, Trophy } from 'lucide-react';
 
 export const App: React.FC = () => {
   const engineRef = useRef<ChessEngineService>(new ChessEngineService());
@@ -148,6 +151,123 @@ export const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const autoPlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [postGameSpeeches, setPostGameSpeeches] = useState<PostGameSpeech[]>([]);
+  const [isGameOverModalOpen, setIsGameOverModalOpen] = useState<boolean>(false);
+  const [isGeneratingGameOverSpeech, setIsGeneratingGameOverSpeech] = useState<boolean>(false);
+  const [winnerColor, setWinnerColor] = useState<'w' | 'b' | null>(null);
+  const hasTriggeredSpeechRef = useRef<boolean>(false);
+
+  const triggerGameOverSpeeches = useCallback(
+    async (status: GameStatus) => {
+      if (hasTriggeredSpeechRef.current) return;
+      hasTriggeredSpeechRef.current = true;
+
+      const engine = engineRef.current;
+      const isCheckmate = status === 'checkmate';
+      const isDraw = !isCheckmate && engine.isGameOver();
+
+      let winner: 'w' | 'b' | null = null;
+      if (isCheckmate) {
+        winner = engine.getTurn() === 'w' ? 'b' : 'w';
+        setWinnerColor(winner);
+      } else {
+        setWinnerColor(null);
+      }
+
+      const participants: {
+        color: PieceColor;
+        config: PlayerConfig;
+        oppConfig: PlayerConfig;
+        outcome: 'win' | 'loss' | 'draw';
+      }[] = [];
+
+      if (whiteConfig.type === 'llm') {
+        const outcome = isDraw ? 'draw' : winner === 'w' ? 'win' : 'loss';
+        participants.push({ color: 'w', config: whiteConfig, oppConfig: blackConfig, outcome });
+      }
+
+      if (blackConfig.type === 'llm') {
+        const outcome = isDraw ? 'draw' : winner === 'b' ? 'win' : 'loss';
+        participants.push({ color: 'b', config: blackConfig, oppConfig: whiteConfig, outcome });
+      }
+
+      if (participants.length === 0) return;
+
+      setIsGameOverModalOpen(true);
+      setIsGeneratingGameOverSpeech(true);
+      setPostGameSpeeches([]);
+
+      const reasonText = isCheckmate
+        ? 'Шах и мат'
+        : status === 'stalemate'
+        ? 'Пат'
+        : status === 'draw_50_moves'
+        ? 'Правило 50 ходов'
+        : status === 'draw_repetition'
+        ? 'Троекратное повторение'
+        : status === 'draw_insufficient_material'
+        ? 'Недостаточно материала для мата'
+        : 'Ничья';
+
+      for (const p of participants) {
+        const preset = GRANDMASTER_PRESETS[p.config.style] || GRANDMASTER_PRESETS.kasparov;
+        const oppPreset = GRANDMASTER_PRESETS[p.oppConfig.style];
+        const oppName =
+          p.oppConfig.type === 'human'
+            ? p.oppConfig.name || 'Человек'
+            : oppPreset?.name || p.oppConfig.name;
+
+        let speechText = '';
+
+        if (p.config.modelId === 'mock-ai' || !p.config.modelId) {
+          speechText = getMockGameOverSpeech(p.config.style, p.outcome, oppName);
+        } else {
+          try {
+            const { systemPrompt, userPrompt } = buildGameOverSpeechPrompt(
+              p.config,
+              p.oppConfig,
+              p.outcome,
+              engine.getPgn(),
+              reasonText
+            );
+
+            speechText = await lmStudioService.generateGameOverSpeech({
+              provider: p.config.provider || 'lmstudio',
+              baseUrl: lmStudioBaseUrl,
+              apiKey: openRouterApiKey,
+              modelId: p.config.modelId,
+              systemPrompt,
+              userPrompt,
+              temperature: 0.85
+            });
+
+            if (!speechText) {
+              speechText = getMockGameOverSpeech(p.config.style, p.outcome, oppName);
+            }
+          } catch (err) {
+            console.warn('Ошибка генерации финальной речи через API, используется fallback:', err);
+            speechText = getMockGameOverSpeech(p.config.style, p.outcome, oppName);
+          }
+        }
+
+        const speechObj: PostGameSpeech = {
+          speakerName: preset.name,
+          avatar: preset.avatar,
+          color: p.color,
+          outcome: p.outcome,
+          style: p.config.style,
+          speechText,
+          timestamp: Date.now()
+        };
+
+        setPostGameSpeeches(prev => [...prev, speechObj]);
+        speechService.speak(speechText, ttsConfig, p.config.style);
+      }
+
+      setIsGeneratingGameOverSpeech(false);
+    },
+    [whiteConfig, blackConfig, lmStudioBaseUrl, openRouterApiKey, ttsConfig]
+  );
 
   const syncGameState = useCallback(() => {
     const engine = engineRef.current;
@@ -160,11 +280,16 @@ export const App: React.FC = () => {
     const status = engine.getGameStatus();
     setGameStatus(status);
 
-    if (status === 'checkmate') {
-      sounds.playVictory();
-      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+    if (engine.isGameOver()) {
+      if (status === 'checkmate') {
+        sounds.playVictory();
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+      }
+      setTimeout(() => {
+        triggerGameOverSpeeches(status);
+      }, 600);
     }
-  }, []);
+  }, [triggerGameOverSpeeches]);
 
   useEffect(() => {
     lmStudioService
@@ -444,6 +569,12 @@ export const App: React.FC = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    hasTriggeredSpeechRef.current = false;
+    setPostGameSpeeches([]);
+    setIsGameOverModalOpen(false);
+    setIsGeneratingGameOverSpeech(false);
+    setWinnerColor(null);
+
     engineRef.current.reset();
     setLastMove(null);
     setMoveThoughts([]);
@@ -534,6 +665,16 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {engineRef.current.isGameOver() && (postGameSpeeches.length > 0 || isGeneratingGameOverSpeech) && (
+            <button
+              onClick={() => setIsGameOverModalOpen(true)}
+              className="px-2.5 py-1 sm:py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer flex items-center gap-1.5 animate-pulse"
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              <span>Последнее слово</span>
+            </button>
+          )}
+
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
             <span className="text-slate-300">LM Studio:</span>
@@ -762,39 +903,19 @@ export const App: React.FC = () => {
         onUpdateTtsConfig={setTtsConfig}
       />
 
-      {/* Модалка завершения партии */}
-      {engineRef.current.isGameOver() && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in zoom-in-95 duration-200">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl space-y-5">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/30">
-              <Trophy className="w-8 h-8" />
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-black text-white">Партия завершена!</h2>
-              <p className="text-slate-300 mt-2 font-medium">
-                {gameStatus === 'checkmate' && (
-                  <span>
-                    Мат! Победили <strong className="text-cyan-400">{engineRef.current.getTurn() === 'w' ? 'Черные' : 'Белые'}</strong>
-                  </span>
-                )}
-                {gameStatus === 'stalemate' && <span>Ничья (Пат на доске)</span>}
-                {gameStatus === 'draw_repetition' && <span>Ничья (Троекратное повторение позиции)</span>}
-                {gameStatus === 'draw_insufficient_material' && <span>Ничья (Недостаточно материала для мата)</span>}
-                {gameStatus === 'draw_50_moves' && <span>Ничья (Правило 50 ходов)</span>}
-              </p>
-            </div>
-
-            <button
-              onClick={handleResetGame}
-              className="w-full py-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-900/40 flex items-center justify-center gap-2 transition-transform hover:scale-105 active:scale-95"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Сыграть еще раз</span>
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Модалка последнего слова и завершения партии */}
+      <GameOverModal
+        isOpen={isGameOverModalOpen}
+        onClose={() => setIsGameOverModalOpen(false)}
+        gameStatus={gameStatus}
+        winnerColor={winnerColor}
+        speeches={postGameSpeeches}
+        isGeneratingSpeech={isGeneratingGameOverSpeech}
+        onReplaySpeech={speech => {
+          speechService.speak(speech.speechText, ttsConfig, speech.style);
+        }}
+        onNewGame={handleResetGame}
+      />
     </div>
   );
 };
