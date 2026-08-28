@@ -6,14 +6,17 @@ import type {
   LMStudioModel, 
   OpenRouterModel, 
   PlayerConfig, 
+  PieceTheme,
   TtsConfig 
 } from '../../types/chess';
+import { PIECE_THEMES } from '../../types/chess';
 import { GRANDMASTER_PRESETS } from '../../services/prompts';
 import { lmStudioService } from '../../services/lmStudioClient';
 import { speechService } from '../../services/speechService';
 import { fetchLiveExchangeRate, CURRENCIES, formatCost } from '../../services/currencyService';
 import { ModelCombobox } from '../ModelSelector/ModelCombobox';
 import { CurrencyCombobox } from '../CurrencySelector/CurrencyCombobox';
+import { ChessPieceSvg } from '../ChessBoard/ChessPieces';
 import {
   Dialog,
   DialogContent,
@@ -52,7 +55,8 @@ import {
   Coins,
   Wand2,
   TrendingUp,
-  Info
+  Info,
+  Palette
 } from 'lucide-react';
 
 export const HUMAN_PERSONAS = [
@@ -98,6 +102,8 @@ interface SettingsModalProps {
   onUpdateBlackConfig: (config: PlayerConfig) => void;
   currencySettings: CurrencySettings;
   onUpdateCurrencySettings: (settings: CurrencySettings) => void;
+  pieceTheme: PieceTheme;
+  onUpdatePieceTheme: (theme: PieceTheme) => void;
   maxRetries: number;
   onUpdateMaxRetries: (retries: number) => void;
   postMoveDelaySec: number;
@@ -124,6 +130,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateBlackConfig,
   currencySettings,
   onUpdateCurrencySettings,
+  pieceTheme = 'cburnett',
+  onUpdatePieceTheme,
   maxRetries,
   onUpdateMaxRetries,
   postMoveDelaySec,
@@ -1140,46 +1148,105 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {activeTab === 'game' && (
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-4 text-xs">
-              <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-primary" />
-                <span>Параметры движка и партии</span>
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-slate-300 font-medium">
-                    <span>Пауза после хода (чтение мыслей):</span>
-                    <span className="font-mono text-primary font-bold">
-                      {postMoveDelaySec === 0 ? 'Без паузы' : `${postMoveDelaySec} сек`}
-                    </span>
+            <div className="space-y-4 text-xs">
+              {/* Выбор темы фигур */}
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
+                    <Palette className="w-4 h-4 text-primary" />
+                    <span>Стиль и оформление фигур (Piece Theme)</span>
                   </div>
-                  <Slider
-                    min={0}
-                    max={10}
-                    step={1}
-                    value={[postMoveDelaySec]}
-                    onValueChange={vals => onUpdatePostMoveDelay(vals[0])}
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Дает время прочитать мысли гроссмейстера перед следующим ходом.
-                  </p>
+                  <Badge variant="cyan" className="font-mono text-xs">
+                    {PIECE_THEMES[pieceTheme]?.name || 'Classic'}
+                  </Badge>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-slate-300 font-medium block">
-                    Лимит попыток на исправление нелегального хода:
-                  </label>
-                  <select
-                    value={maxRetries}
-                    onChange={e => onUpdateMaxRetries(parseInt(e.target.value))}
-                    className="w-full h-9 px-3 rounded-xl bg-slate-900 border border-border text-foreground text-xs focus:outline-none focus:border-primary"
-                  >
-                    <option value="1">1 попытка (без повторов)</option>
-                    <option value="2">2 попытки</option>
-                    <option value="3">3 попытки (рекомендуется)</option>
-                    <option value="5">5 попыток</option>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+                  {(Object.keys(PIECE_THEMES) as PieceTheme[]).map(themeKey => {
+                    const themeInfo = PIECE_THEMES[themeKey];
+                    const isSelected = pieceTheme === themeKey;
+
+                    return (
+                      <div
+                        key={themeKey}
+                        onClick={() => onUpdatePieceTheme(themeKey)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-2 select-none ${
+                          isSelected
+                            ? 'bg-slate-900 border-primary shadow-cyan-glow ring-1 ring-primary/60 scale-[1.02]'
+                            : 'bg-slate-900/60 border-border/80 hover:border-slate-600 hover:bg-slate-900/90'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold text-foreground text-xs">
+                            <span>{themeInfo.previewIcon}</span>
+                            <span className="truncate">{themeInfo.name}</span>
+                          </div>
+                          {isSelected && (
+                            <span className="w-2 h-2 rounded-full bg-primary animate-ping shrink-0" />
+                          )}
+                        </div>
+
+                        {/* Живое превью фигур (Белый конь + Черный ферзь) */}
+                        <div className="flex items-center justify-center gap-4 py-2 px-3 rounded-xl bg-slate-950/90 border border-border/60">
+                          <div className="w-9 h-9 drop-shadow">
+                            <ChessPieceSvg type="n" color="w" theme={themeKey} />
+                          </div>
+                          <div className="w-9 h-9 drop-shadow">
+                            <ChessPieceSvg type="q" color="b" theme={themeKey} />
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-muted-foreground line-clamp-2 leading-tight">
+                          {themeInfo.description}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Параметры движка и партии */}
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-4">
+                <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-primary" />
+                  <span>Параметры движка и партии</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-slate-300 font-medium">
+                      <span>Пауза после хода (чтение мыслей):</span>
+                      <span className="font-mono text-primary font-bold">
+                        {postMoveDelaySec === 0 ? 'Без паузы' : `${postMoveDelaySec} сек`}
+                      </span>
+                    </div>
+                    <Slider
+                      min={0}
+                      max={10}
+                      step={1}
+                      value={[postMoveDelaySec]}
+                      onValueChange={vals => onUpdatePostMoveDelay(vals[0])}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Дает время прочитать мысли гроссмейстера перед следующим ходом.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-slate-300 font-medium block">
+                      Лимит попыток на исправление нелегального хода:
+                    </label>
+                    <select
+                      value={maxRetries}
+                      onChange={e => onUpdateMaxRetries(parseInt(e.target.value))}
+                      className="w-full h-9 px-3 rounded-xl bg-slate-900 border border-border text-foreground text-xs focus:outline-none focus:border-primary"
+                    >
+                      <option value="1">1 попытка (без повторов)</option>
+                      <option value="2">2 попытки</option>
+                      <option value="3">3 попытки (рекомендуется)</option>
+                      <option value="5">5 попыток</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>

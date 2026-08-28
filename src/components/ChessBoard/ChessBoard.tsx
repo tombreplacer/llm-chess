@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import type { Chess, Square, PieceSymbol } from 'chess.js';
-import type { PieceColor } from '../../types/chess';
+import type { PieceColor, PieceTheme } from '../../types/chess';
 import { ChessPieceSvg } from './ChessPieces';
 
 interface ChessBoardProps {
   chess: Chess;
   boardOrientation?: PieceColor;
+  pieceTheme?: PieceTheme;
   isInteractive?: boolean;
   onMakeMove?: (move: { from: Square; to: Square; promotion?: PieceSymbol }) => void;
   lastMove?: { from: Square; to: Square } | null;
@@ -14,6 +15,7 @@ interface ChessBoardProps {
 export const ChessBoard: React.FC<ChessBoardProps> = ({
   chess,
   boardOrientation = 'w',
+  pieceTheme = 'cburnett',
   isInteractive = true,
   onMakeMove,
   lastMove = null
@@ -198,7 +200,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                       isSelected ? 'scale-110 drop-shadow-[0_8px_12px_rgba(0,0,0,0.6)]' : 'hover:scale-105'
                     } ${isInteractive && piece.color === chess.turn() ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   >
-                    <ChessPieceSvg type={piece.type} color={piece.color} />
+                    <ChessPieceSvg type={piece.type} color={piece.color} theme={pieceTheme} />
                   </div>
                 )}
               </div>
@@ -218,7 +220,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 onClick={() => handlePromotionSelect(pSymbol)}
                 className="w-12 h-12 sm:w-14 sm:h-14 p-2 bg-slate-800 hover:bg-emerald-600 rounded-xl transition-all flex items-center justify-center shadow-md hover:scale-110 active:scale-95 cursor-pointer"
               >
-                <ChessPieceSvg type={pSymbol} color={chess.turn()} />
+                <ChessPieceSvg type={pSymbol} color={chess.turn()} theme={pieceTheme} />
               </button>
             ))}
           </div>

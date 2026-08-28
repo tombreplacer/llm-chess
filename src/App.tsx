@@ -12,6 +12,7 @@ import type {
   OpenRouterModel,
   MoveThought,
   PieceColor,
+  PieceTheme,
   PlayerConfig,
   TtsConfig
 } from './types/chess';
@@ -93,6 +94,7 @@ export const App: React.FC = () => {
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(() => initialGame?.lastMove || null);
 
   const [gameMode, setGameMode] = useState<GameMode>(() => initialSettings?.gameMode || 'human_vs_llm');
+  const [pieceTheme, setPieceTheme] = useState<PieceTheme>(() => initialSettings?.pieceTheme || 'cburnett');
   const [boardOrientation, setBoardOrientation] = useState<PieceColor>(() => initialSettings?.boardOrientation || 'w');
   const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(false);
 
@@ -180,6 +182,7 @@ export const App: React.FC = () => {
       const toSave = {
         gameMode,
         boardOrientation,
+        pieceTheme,
         lmStudioBaseUrl,
         openRouterApiKey,
         maxRetries,
@@ -190,7 +193,7 @@ export const App: React.FC = () => {
       };
       localStorage.setItem('llm_chess_arena_settings_v1', JSON.stringify(toSave));
     } catch {}
-  }, [gameMode, boardOrientation, lmStudioBaseUrl, openRouterApiKey, maxRetries, postMoveDelaySec, whiteConfig, blackConfig, ttsConfig]);
+  }, [gameMode, boardOrientation, pieceTheme, lmStudioBaseUrl, openRouterApiKey, maxRetries, postMoveDelaySec, whiteConfig, blackConfig, ttsConfig]);
 
   const [moveThoughts, setMoveThoughts] = useState<MoveThought[]>(() => initialGame?.moveThoughts || []);
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number | null>(null);
@@ -1039,6 +1042,7 @@ export const App: React.FC = () => {
             <PlayerCard
               color={boardOrientation === 'w' ? 'b' : 'w'}
               config={boardOrientation === 'w' ? blackConfig : whiteConfig}
+              pieceTheme={pieceTheme}
               isCurrentTurn={currentTurn === (boardOrientation === 'w' ? 'b' : 'w')}
               isThinking={activeThinking.isStreaming && activeThinking.color === (boardOrientation === 'w' ? 'b' : 'w')}
               capturedPieces={boardOrientation === 'w' ? evaluation.captured.b : evaluation.captured.w}
@@ -1059,6 +1063,7 @@ export const App: React.FC = () => {
               <ChessBoard
                 chess={chessState}
                 boardOrientation={boardOrientation}
+                pieceTheme={pieceTheme}
                 isInteractive={isHumanTurn && !activeThinking.isStreaming && !isGameOver}
                 onMakeMove={handleHumanMove}
                 lastMove={lastMove}
@@ -1071,6 +1076,7 @@ export const App: React.FC = () => {
             <PlayerCard
               color={boardOrientation === 'w' ? 'w' : 'b'}
               config={boardOrientation === 'w' ? whiteConfig : blackConfig}
+              pieceTheme={pieceTheme}
               isCurrentTurn={currentTurn === (boardOrientation === 'w' ? 'w' : 'b')}
               isThinking={activeThinking.isStreaming && activeThinking.color === (boardOrientation === 'w' ? 'w' : 'b')}
               capturedPieces={boardOrientation === 'w' ? evaluation.captured.w : evaluation.captured.b}
@@ -1174,6 +1180,8 @@ export const App: React.FC = () => {
         onUpdateBlackConfig={setBlackConfig}
         currencySettings={currencySettings}
         onUpdateCurrencySettings={setCurrencySettings}
+        pieceTheme={pieceTheme}
+        onUpdatePieceTheme={setPieceTheme}
         maxRetries={maxRetries}
         onUpdateMaxRetries={setMaxRetries}
         postMoveDelaySec={postMoveDelaySec}

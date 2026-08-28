@@ -28,6 +28,54 @@ export interface GrandmasterPreset {
 
 export type LlmProvider = 'lmstudio' | 'openrouter';
 
+export type PieceTheme = 'cburnett' | 'neon' | 'alpha' | 'pixel' | 'merida' | 'spatial';
+
+export interface PieceThemeInfo {
+  id: PieceTheme;
+  name: string;
+  description: string;
+  previewIcon: string;
+}
+
+export const PIECE_THEMES: Record<PieceTheme, PieceThemeInfo> = {
+  cburnett: {
+    id: 'cburnett',
+    name: 'Classic Staunton',
+    description: 'Турнирный международный стандарт (Lichess/Wikipedia)',
+    previewIcon: '♟️'
+  },
+  neon: {
+    id: 'neon',
+    name: 'Neon Cyberpunk',
+    description: 'Футуристичный неоновый стиль со светящимися контурами',
+    previewIcon: '⚡'
+  },
+  alpha: {
+    id: 'alpha',
+    name: 'Alpha Modern',
+    description: 'Лаконичные плоские геометрические силуэты с четким контрастом',
+    previewIcon: '💠'
+  },
+  pixel: {
+    id: 'pixel',
+    name: '8-Bit Retro Pixel',
+    description: 'Пиксельная графика в стиле олдскульных 8-битных аркад',
+    previewIcon: '👾'
+  },
+  merida: {
+    id: 'merida',
+    name: 'Merida Master',
+    description: 'Элегантный винтажный гроссмейстерский набор журнального типа',
+    previewIcon: '👑'
+  },
+  spatial: {
+    id: 'spatial',
+    name: 'Spatial Hologram',
+    description: 'Голографические грани и футуристичный Sci-Fi дизайн',
+    previewIcon: '🌌'
+  }
+};
+
 export interface LMStudioModel {
   id: string;
   object?: string;

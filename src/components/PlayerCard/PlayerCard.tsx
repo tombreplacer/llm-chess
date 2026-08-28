@@ -1,5 +1,5 @@
 import React from 'react';
-import type { PieceColor, PlayerConfig } from '../../types/chess';
+import type { PieceColor, PieceTheme, PlayerConfig } from '../../types/chess';
 import { GRANDMASTER_PRESETS } from '../../services/prompts';
 import { ChessPieceSvg } from '../ChessBoard/ChessPieces';
 import { Bot, User, Brain, MessageSquare } from 'lucide-react';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 interface PlayerCardProps {
   color: PieceColor;
   config: PlayerConfig;
+  pieceTheme?: PieceTheme;
   isCurrentTurn: boolean;
   isThinking: boolean;
   capturedPieces: PieceSymbol[];
@@ -20,6 +21,7 @@ interface PlayerCardProps {
 export const PlayerCard: React.FC<PlayerCardProps> = ({
   color,
   config,
+  pieceTheme = 'cburnett',
   isCurrentTurn,
   isThinking,
   capturedPieces,
@@ -97,7 +99,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
               <div className="flex items-center gap-0.5 mt-0.5 flex-wrap">
                 {capturedPieces.map((p, idx) => (
                   <div key={idx} className="w-3.5 h-3.5 opacity-85 shrink-0">
-                    <ChessPieceSvg type={p} color={isWhite ? 'b' : 'w'} />
+                    <ChessPieceSvg type={p} color={isWhite ? 'b' : 'w'} theme={pieceTheme} />
                   </div>
                 ))}
                 {myAdvantage > 0 && (
