@@ -1,6 +1,7 @@
 import React from 'react';
-import type { MoveThought } from '../../types/chess';
-import { Brain, Copy, Check, ScrollText } from 'lucide-react';
+import type { CurrencyCode, MoveThought } from '../../types/chess';
+import { formatCost } from '../../services/currencyService';
+import { Brain, Copy, Check, ScrollText, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -10,6 +11,8 @@ interface MoveHistoryProps {
   onSelectMove: (index: number | null) => void;
   pgn: string;
   fen: string;
+  currency?: CurrencyCode;
+  exchangeRate?: number;
 }
 
 const MoveLabel: React.FC<{ move: MoveThought }> = ({ move }) => {
@@ -47,7 +50,9 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
   selectedMoveIndex,
   onSelectMove,
   pgn,
-  fen
+  fen,
+  currency = 'RUB',
+  exchangeRate = 92.5
 }) => {
   const [copiedPgn, setCopiedPgn] = React.useState(false);
   const [copiedFen, setCopiedFen] = React.useState(false);
@@ -64,6 +69,9 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
     setTimeout(() => setCopiedFen(false), 2000);
   };
 
+  const totalSessionCostUsd = moveThoughts.reduce((sum, t) => sum + (t.costUsd || 0), 0);
+  const formattedSessionCost = formatCost(totalSessionCostUsd, currency, exchangeRate);
+
   const pairedMoves: { moveNumber: number; white?: MoveThought; black?: MoveThought }[] = [];
   for (let i = 0; i < moveThoughts.length; i += 2) {
     pairedMoves.push({
@@ -75,16 +83,27 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
 
   return (
     <div className="w-full bg-slate-900/90 border border-border/80 rounded-2xl p-3.5 shadow-xl flex flex-col h-full backdrop-blur-xl">
-      <div className="flex items-center justify-between pb-2.5 border-b border-border/80">
-        <div className="flex items-center gap-2">
-          <ScrollText className="w-4 h-4 text-primary" />
+      <div className="flex items-center justify-between pb-2.5 border-b border-border/80 gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <ScrollText className="w-4 h-4 text-primary shrink-0" />
           <h3 className="font-bold text-foreground text-xs sm:text-sm">История ходов</h3>
           <Badge variant="secondary" className="font-mono text-[10px] py-0 px-1.5">
             {moveThoughts.length}
           </Badge>
+
+          {totalSessionCostUsd > 0 && (
+            <Badge
+              variant="emerald"
+              className="gap-1 font-mono text-[10px] py-0 px-1.5 font-bold shrink-0 shadow-sm"
+              title={`Всего израсходовано за текущую сессию: ${formattedSessionCost} (в пересчете из $${totalSessionCostUsd.toFixed(5)})`}
+            >
+              <Coins className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+              <span>{formattedSessionCost}</span>
+            </Badge>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <Button
             type="button"
             size="sm"
@@ -154,6 +173,14 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
                     >
                       <MoveLabel move={pair.white} />
                       <div className="flex items-center gap-1">
+                        {pair.white.costUsd !== undefined && pair.white.costUsd > 0 && (
+                          <span
+                            title={`Стоимость хода: ${formatCost(pair.white.costUsd, currency, exchangeRate)}`}
+                            className="text-[9px] text-emerald-400/90 font-mono font-medium hidden sm:inline"
+                          >
+                            {formatCost(pair.white.costUsd, currency, exchangeRate)}
+                          </span>
+                        )}
                         {pair.white.retries && pair.white.retries.length > 0 && (
                           <Badge variant="rose" className="text-[9px] py-0 px-1 font-bold">
                             ⚠️{pair.white.retries.length}
@@ -185,6 +212,14 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
                     >
                       <MoveLabel move={pair.black} />
                       <div className="flex items-center gap-1">
+                        {pair.black.costUsd !== undefined && pair.black.costUsd > 0 && (
+                          <span
+                            title={`Стоимость хода: ${formatCost(pair.black.costUsd, currency, exchangeRate)}`}
+                            className="text-[9px] text-emerald-400/90 font-mono font-medium hidden sm:inline"
+                          >
+                            {formatCost(pair.black.costUsd, currency, exchangeRate)}
+                          </span>
+                        )}
                         {pair.black.retries && pair.black.retries.length > 0 && (
                           <Badge variant="rose" className="text-[9px] py-0 px-1 font-bold">
                             ⚠️{pair.black.retries.length}

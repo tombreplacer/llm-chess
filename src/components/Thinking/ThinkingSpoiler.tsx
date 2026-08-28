@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { MoveThought, PieceColor, RetryLog } from '../../types/chess';
+import type { CurrencyCode, MoveThought, PieceColor, RetryLog } from '../../types/chess';
+import { formatCost } from '../../services/currencyService';
 import {
-  ChevronDown,
-  ChevronRight,
   Brain,
   AlertTriangle,
   Clock,
-  CheckCircle2,
-  RotateCw,
   FastForward,
-  Zap
+  Zap,
+  Coins,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle2,
+  RotateCw
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,9 @@ interface ThinkingSpoilerProps {
   contentStream?: string;
   tokenCount?: number;
   tokensPerSecond?: number;
+  costUsd?: number;
+  currency?: CurrencyCode;
+  exchangeRate?: number;
   isThinkingActive?: boolean;
   isStreaming?: boolean;
   activeColor?: PieceColor;
@@ -41,6 +46,9 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
   contentStream = '',
   tokenCount = 0,
   tokensPerSecond = 0,
+  costUsd,
+  currency = 'RUB',
+  exchangeRate = 92.5,
   isThinkingActive = false,
   isStreaming = false,
   activeColor = 'w',
@@ -93,6 +101,9 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
   const savedTokenDisplay = savedThought?.tokenCount || Math.round(((savedThought?.thoughtText.length || 0) + (savedThought?.finalMoveRaw.length || 0)) / 2.8);
   const savedSpeedDisplay = savedThought?.tokensPerSecond || (savedThought?.durationMs && savedThought.durationMs > 0 && savedTokenDisplay ? +((savedTokenDisplay / (savedThought.durationMs / 1000)).toFixed(1)) : 0);
 
+  const liveCostFormatted = costUsd !== undefined && costUsd > 0 ? formatCost(costUsd, currency, exchangeRate) : null;
+  const savedCostFormatted = savedThought?.costUsd !== undefined && savedThought.costUsd > 0 ? formatCost(savedThought.costUsd, currency, exchangeRate) : null;
+
   return (
     <div className="flex flex-col h-full bg-slate-900/90 border border-border/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-xl">
       {/* Шапка карточки игрока */}
@@ -122,16 +133,25 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          {/* Живой счетчик скорости и токенов во время генерации */}
+          {/* Живой счетчик скорости, токенов и стоимости во время генерации */}
           {isLive && isStreaming && (
-            <Badge variant="cyan" className="gap-1 font-mono animate-pulse shadow-cyan-glow">
-              <Zap className="w-3 h-3 text-primary animate-bounce shrink-0" />
-              <span>{liveTokenDisplay} tok</span>
-              <span className="text-primary/60">•</span>
-              <span className="text-emerald-400 font-bold">
-                {tokensPerSecond > 0 ? `${tokensPerSecond.toFixed(1)} t/s` : 'генерация...'}
-              </span>
-            </Badge>
+            <>
+              <Badge variant="cyan" className="gap-1 font-mono animate-pulse shadow-cyan-glow">
+                <Zap className="w-3 h-3 text-primary animate-bounce shrink-0" />
+                <span>{liveTokenDisplay} tok</span>
+                <span className="text-primary/60">•</span>
+                <span className="text-emerald-400 font-bold">
+                  {tokensPerSecond > 0 ? `${tokensPerSecond.toFixed(1)} t/s` : 'генерация...'}
+                </span>
+              </Badge>
+
+              {liveCostFormatted && (
+                <Badge variant="emerald" className="gap-1 font-mono shrink-0 shadow-sm" title="Текущая стоимость генерации хода">
+                  <Coins className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span>{liveCostFormatted}</span>
+                </Badge>
+              )}
+            </>
           )}
 
           {isLive && isInspectingPause && inspectCountdown !== null && (
@@ -163,9 +183,9 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
             </Badge>
           )}
 
-          {/* Сохраненный ход: отображение скорости, токенов и времени */}
+          {/* Сохраненный ход: отображение скорости, токенов, стоимости и времени */}
           {savedThought && (
-            <div className="flex items-center gap-1.5 font-mono text-xs">
+            <div className="flex items-center gap-1.5 font-mono text-xs flex-wrap">
               <Badge variant="cyan" className="gap-1">
                 <Zap className="w-3 h-3 text-primary shrink-0" />
                 <span>{savedTokenDisplay} tok</span>
@@ -176,6 +196,13 @@ export const ThinkingSpoiler: React.FC<ThinkingSpoilerProps> = ({
                   </>
                 )}
               </Badge>
+
+              {savedCostFormatted && (
+                <Badge variant="emerald" className="gap-1" title="Стоимость этого хода">
+                  <Coins className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span>{savedCostFormatted}</span>
+                </Badge>
+              )}
 
               <Badge variant="secondary" className="gap-1 text-muted-foreground">
                 <Clock className="w-3 h-3 shrink-0" />

@@ -4,6 +4,7 @@ import type { Square, PieceSymbol } from 'chess.js';
 import confetti from 'canvas-confetti';
 import type {
   ActiveThinkingState,
+  CurrencySettings,
   GameEvaluation,
   GameMode,
   GameStatus,
@@ -20,6 +21,7 @@ import { lmStudioService, POPULAR_OPENROUTER_MODELS } from './services/lmStudioC
 import { speechService } from './services/speechService';
 import { GRANDMASTER_PRESETS } from './services/prompts';
 import { sounds } from './services/soundEffects';
+import { formatCost } from './services/currencyService';
 
 import { ChessBoard } from './components/ChessBoard/ChessBoard';
 import { ThinkingSpoiler } from './components/Thinking/ThinkingSpoiler';
@@ -35,7 +37,7 @@ import type { PostGameSpeech } from './types/chess';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-import { Swords, Trophy, Settings } from 'lucide-react';
+import { Swords, Trophy, Settings, Coins } from 'lucide-react';
 
 interface SavedGameState {
   fen: string;
@@ -94,19 +96,31 @@ export const App: React.FC = () => {
   const [boardOrientation, setBoardOrientation] = useState<PieceColor>(() => initialSettings?.boardOrientation || 'w');
   const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(false);
 
+  const [currencySettings, setCurrencySettings] = useState<CurrencySettings>(() => {
+    try {
+      const saved = localStorage.getItem('llm_chess_arena_currency_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      currency: 'RUB',
+      exchangeRate: 92.5,
+      lastUpdated: Date.now()
+    };
+  });
+
   const [lmStudioBaseUrl, setLmStudioBaseUrl] = useState<string>(() => initialSettings?.lmStudioBaseUrl || 'http://localhost:1234/v1');
   const [openRouterApiKey, setOpenRouterApiKey] = useState<string>(() => initialSettings?.openRouterApiKey || '');
   const [availableModels, setAvailableModels] = useState<LMStudioModel[]>([]);
   const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>(POPULAR_OPENROUTER_MODELS);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [settingsTab, setSettingsTab] = useState<'providers' | 'players' | 'tts' | 'game'>('providers');
+  const [settingsTab, setSettingsTab] = useState<'providers' | 'players' | 'currency' | 'tts' | 'game'>('providers');
   const [mobileTab, setMobileTab] = useState<'board' | 'thinking' | 'history'>('board');
   const [humanComment, setHumanComment] = useState<string>(() => initialGame?.humanComment || '');
   const [isMobileChatOpen, setIsMobileChatOpen] = useState<boolean>(false);
   const [maxRetries, setMaxRetries] = useState<number>(() => initialSettings?.maxRetries ?? 3);
   const [postMoveDelaySec, setPostMoveDelaySec] = useState<number>(() => initialSettings?.postMoveDelaySec ?? 3);
 
-  const handleOpenSettings = (tab: 'providers' | 'players' | 'tts' | 'game' = 'providers') => {
+  const handleOpenSettings = (tab: 'providers' | 'players' | 'currency' | 'tts' | 'game' = 'providers') => {
     setSettingsTab(tab);
     setIsSettingsOpen(true);
   };
@@ -132,7 +146,7 @@ export const App: React.FC = () => {
     modelId: 'mock-ai',
     style: 'kasparov',
     temperature: 0.6,
-    maxTokens: 2048,
+    maxTokens: -1,
     systemPromptCustom: '',
     ...(initialSettings?.whiteConfig || {})
   }));
@@ -146,7 +160,7 @@ export const App: React.FC = () => {
     modelId: 'mock-ai',
     style: 'kasparov',
     temperature: 0.6,
-    maxTokens: 2048,
+    maxTokens: -1,
     systemPromptCustom: '',
     ...(initialSettings?.blackConfig || {})
   }));
@@ -436,6 +450,7 @@ export const App: React.FC = () => {
         contentStream: '',
         tokenCount: 0,
         tokensPerSecond: 0,
+        costUsd: 0,
         isThinking: true,
         isStreaming: true,
         startTime: Date.now(),
@@ -444,6 +459,9 @@ export const App: React.FC = () => {
 
       const lastOpponentThought = [...moveThoughts].reverse().find(t => t.color !== turnColor && t.comment);
       const lastOpponentComment = lastOpponentThought?.comment;
+      const modelPricing = playerConfig.provider === 'openrouter' 
+        ? openRouterModels.find(m => m.id === playerConfig.modelId)?.pricing 
+        : undefined;
 
       try {
         const result = await chessJudge.executeLlmTurn({
@@ -454,6 +472,7 @@ export const App: React.FC = () => {
           lastOpponentComment,
           lmStudioBaseUrl,
           openRouterApiKey,
+          modelPricing,
           maxRetries,
           callbacks: {
             onThinkingChunk: (_chunk, fullThinking) => {
@@ -469,11 +488,12 @@ export const App: React.FC = () => {
                 contentStream: fullContent
               }));
             },
-            onTokenMetrics: ({ totalTokens, tokensPerSecond }) => {
+            onTokenMetrics: ({ totalTokens, tokensPerSecond, costUsd }) => {
               setActiveThinking(prev => ({
                 ...prev,
                 tokenCount: totalTokens,
-                tokensPerSecond
+                tokensPerSecond,
+                costUsd
               }));
             },
             onThinkingFinished: () => {
@@ -893,6 +913,19 @@ export const App: React.FC = () => {
             </button>
           )}
 
+          {/* Индикатор общих расходов за сессию */}
+          {moveThoughts.some(t => (t.costUsd || 0) > 0) && (
+            <button
+              type="button"
+              onClick={() => handleOpenSettings('currency')}
+              title={`Расход за сессию: ${formatCost(moveThoughts.reduce((s, t) => s + (t.costUsd || 0), 0), currencySettings.currency, currencySettings.exchangeRate)}. Нажмите для настроек валюты.`}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-950/70 border border-emerald-700/60 text-emerald-300 text-xs font-mono font-bold hover:bg-emerald-900/80 transition-all cursor-pointer shadow-sm"
+            >
+              <Coins className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>{formatCost(moveThoughts.reduce((s, t) => s + (t.costUsd || 0), 0), currencySettings.currency, currencySettings.exchangeRate)}</span>
+            </button>
+          )}
+
           <Button
             size="sm"
             variant="neon"
@@ -950,6 +983,8 @@ export const App: React.FC = () => {
               <ThinkingSpoiler
                 isLive={false}
                 savedThought={displayedSavedThought}
+                currency={currencySettings.currency}
+                exchangeRate={currencySettings.exchangeRate}
                 playerName={
                   displayedSavedThought.color === 'w'
                     ? whiteConfig.name
@@ -969,6 +1004,9 @@ export const App: React.FC = () => {
                 contentStream={activeThinking.contentStream}
                 tokenCount={activeThinking.tokenCount}
                 tokensPerSecond={activeThinking.tokensPerSecond}
+                costUsd={activeThinking.costUsd}
+                currency={currencySettings.currency}
+                exchangeRate={currencySettings.exchangeRate}
                 isThinkingActive={activeThinking.isThinking}
                 isStreaming={activeThinking.isStreaming}
                 activeColor={activeThinking.color}
@@ -1113,6 +1151,8 @@ export const App: React.FC = () => {
             onSelectMove={setSelectedMoveIndex}
             pgn={pgn}
             fen={fen}
+            currency={currencySettings.currency}
+            exchangeRate={currencySettings.exchangeRate}
           />
         </div>
       </main>
@@ -1132,6 +1172,8 @@ export const App: React.FC = () => {
         onUpdateWhiteConfig={setWhiteConfig}
         blackConfig={blackConfig}
         onUpdateBlackConfig={setBlackConfig}
+        currencySettings={currencySettings}
+        onUpdateCurrencySettings={setCurrencySettings}
         maxRetries={maxRetries}
         onUpdateMaxRetries={setMaxRetries}
         postMoveDelaySec={postMoveDelaySec}

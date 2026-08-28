@@ -13,6 +13,7 @@ export interface ExecuteMoveParams {
   lastOpponentComment?: string;
   lmStudioBaseUrl: string;
   openRouterApiKey?: string;
+  modelPricing?: { prompt?: string | number; completion?: string | number };
   maxRetries?: number;
   callbacks: StreamCallbacks;
   abortSignal?: AbortSignal;
@@ -34,6 +35,7 @@ export class ChessJudge {
       lastOpponentComment,
       lmStudioBaseUrl,
       openRouterApiKey,
+      modelPricing,
       maxRetries = 3,
       callbacks,
       abortSignal
@@ -56,6 +58,9 @@ export class ChessJudge {
     let finalContent = '';
     let finalTokenCount = 0;
     let finalTokensPerSecond = 0;
+    let finalCostUsd = 0;
+    let finalPromptTokens = 0;
+    let finalCompletionTokens = 0;
     let chosenLegalMoveSan = '';
     let chosenComment: string | undefined = undefined;
     let rawMoveFound = '';
@@ -105,6 +110,7 @@ export class ChessJudge {
             baseUrl: lmStudioBaseUrl,
             apiKey: openRouterApiKey,
             modelId: playerConfig.modelId,
+            modelPricing,
             systemPrompt,
             userPrompt,
             temperature: playerConfig.temperature,
@@ -117,6 +123,9 @@ export class ChessJudge {
           rawResponse = result.rawResponse;
           turnTokenCount = result.tokenCount || 0;
           turnTokensPerSecond = result.tokensPerSecond || 0;
+          finalCostUsd += (result.costUsd || 0);
+          finalPromptTokens = result.promptTokens || 0;
+          finalCompletionTokens = result.completionTokens || turnTokenCount;
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -220,6 +229,9 @@ export class ChessJudge {
       durationMs,
       tokenCount: finalTokenCount,
       tokensPerSecond: finalTokensPerSecond,
+      costUsd: finalCostUsd,
+      promptTokens: finalPromptTokens,
+      completionTokens: finalCompletionTokens,
       retries,
       timestamp: Date.now(),
       captured: moveResult.captured

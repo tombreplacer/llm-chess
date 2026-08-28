@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import type { GrandmasterStyle, LMStudioModel, OpenRouterModel, PlayerConfig, TtsConfig } from '../../types/chess';
+import type { 
+  CurrencyCode, 
+  CurrencySettings, 
+  GrandmasterStyle, 
+  LMStudioModel, 
+  OpenRouterModel, 
+  PlayerConfig, 
+  TtsConfig 
+} from '../../types/chess';
 import { GRANDMASTER_PRESETS } from '../../services/prompts';
 import { lmStudioService } from '../../services/lmStudioClient';
 import { speechService } from '../../services/speechService';
+import { fetchLiveExchangeRate, CURRENCIES, formatCost } from '../../services/currencyService';
 import { ModelCombobox } from '../ModelSelector/ModelCombobox';
+import { CurrencyCombobox } from '../CurrencySelector/CurrencyCombobox';
 import {
   Dialog,
   DialogContent,
@@ -38,7 +48,11 @@ import {
   ExternalLink,
   Cpu,
   Zap,
-  Sliders
+  Sliders,
+  Coins,
+  Wand2,
+  TrendingUp,
+  Info
 } from 'lucide-react';
 
 export const HUMAN_PERSONAS = [
@@ -60,12 +74,12 @@ export const HUMAN_PERSONAS = [
   {
     name: 'Дворовый Батя',
     avatar: '🍺',
-    bio: '30 лет опыта игры на лавочке во дворе под пиво. Не знаю теории, но конем хожу так, что мало не покажется.'
+    bio: 'Играю на лавке под пивко, люблю вилки конями и неожиданные маты в 3 хода.'
   },
   {
-    name: 'Новичок в цейтноте',
-    avatar: '🐣',
-    bio: 'Быстро паникую, легко попадаюсь в связки и вилки, но искренне верю в победу и борюсь до конца.'
+    name: 'Гроссмейстер Блица',
+    avatar: '👑',
+    bio: 'Быстрый расчет вариантов, мгновенная реакция и непрерывное давление на часы.'
   }
 ];
 
@@ -82,6 +96,8 @@ interface SettingsModalProps {
   onUpdateWhiteConfig: (config: PlayerConfig) => void;
   blackConfig: PlayerConfig;
   onUpdateBlackConfig: (config: PlayerConfig) => void;
+  currencySettings: CurrencySettings;
+  onUpdateCurrencySettings: (settings: CurrencySettings) => void;
   maxRetries: number;
   onUpdateMaxRetries: (retries: number) => void;
   postMoveDelaySec: number;
@@ -90,7 +106,7 @@ interface SettingsModalProps {
   onSetAvailableModels: (models: LMStudioModel[]) => void;
   ttsConfig: TtsConfig;
   onUpdateTtsConfig: (config: TtsConfig) => void;
-  initialTab?: 'providers' | 'players' | 'tts' | 'game';
+  initialTab?: 'providers' | 'players' | 'currency' | 'tts' | 'game';
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -106,6 +122,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateWhiteConfig,
   blackConfig,
   onUpdateBlackConfig,
+  currencySettings,
+  onUpdateCurrencySettings,
   maxRetries,
   onUpdateMaxRetries,
   postMoveDelaySec,
@@ -116,7 +134,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateTtsConfig,
   initialTab = 'providers'
 }) => {
-  const [activeTab, setActiveTab] = useState<'providers' | 'players' | 'tts' | 'game'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'providers' | 'players' | 'currency' | 'tts' | 'game'>(initialTab);
   const [activeProviderTab, setActiveProviderTab] = useState<'lmstudio' | 'openrouter'>('lmstudio');
   const [urlInput, setUrlInput] = useState(lmStudioBaseUrl);
   const [apiKeyInput, setApiKeyInput] = useState(openRouterApiKey);
@@ -129,6 +147,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isOpenRouterLoading, setIsOpenRouterLoading] = useState(false);
   const [openRouterStatus, setOpenRouterStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [openRouterStatusMsg, setOpenRouterStatusMsg] = useState('');
+
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
+  const [rateFetchMsg, setRateFetchMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [manualRateInput, setManualRateInput] = useState<string>(String(currencySettings?.exchangeRate || 92.5));
 
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
@@ -217,6 +239,84 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       ttsConfig,
       'nikolaich'
     );
+  };
+
+  const handleFetchRate = async () => {
+    setIsFetchingRate(true);
+    setRateFetchMsg(null);
+    try {
+      const rate = await fetchLiveExchangeRate(currencySettings.currency);
+      if (rate && rate > 0) {
+        const cleanRate = Number(rate.toFixed(4));
+        onUpdateCurrencySettings({
+          ...currencySettings,
+          exchangeRate: cleanRate,
+          lastUpdated: Date.now()
+        });
+        setManualRateInput(String(cleanRate));
+        setRateFetchMsg({
+          type: 'success',
+          text: `Курс 1 USD = ${cleanRate} ${CURRENCIES[currencySettings.currency]?.symbol} успешно обновлен из открытого API!`
+        });
+      } else {
+        setRateFetchMsg({
+          type: 'error',
+          text: 'Не удалось получить курс из сети. Укажите курс вручную.'
+        });
+      }
+    } catch {
+      setRateFetchMsg({
+        type: 'error',
+        text: 'Ошибка запроса к API курсов валют.'
+      });
+    } finally {
+      setIsFetchingRate(false);
+    }
+  };
+
+  const handleCurrencyChange = async (newCode: CurrencyCode) => {
+    const defaultRate = CURRENCIES[newCode]?.defaultRate || 1.0;
+    onUpdateCurrencySettings({
+      currency: newCode,
+      exchangeRate: defaultRate,
+      lastUpdated: Date.now()
+    });
+    setManualRateInput(String(defaultRate));
+    setRateFetchMsg(null);
+
+    // Автоматический запрос курса при смене валюты (если не USD)
+    if (newCode !== 'USD') {
+      setIsFetchingRate(true);
+      try {
+        const rate = await fetchLiveExchangeRate(newCode);
+        if (rate && rate > 0) {
+          const cleanRate = Number(rate.toFixed(4));
+          onUpdateCurrencySettings({
+            currency: newCode,
+            exchangeRate: cleanRate,
+            lastUpdated: Date.now()
+          });
+          setManualRateInput(String(cleanRate));
+          setRateFetchMsg({
+            type: 'success',
+            text: `Актуальный курс: 1 USD = ${cleanRate} ${CURRENCIES[newCode]?.symbol}`
+          });
+        }
+      } catch {}
+      setIsFetchingRate(false);
+    }
+  };
+
+  const handleManualRateChange = (valStr: string) => {
+    setManualRateInput(valStr);
+    const num = parseFloat(valStr);
+    if (!isNaN(num) && num > 0) {
+      onUpdateCurrencySettings({
+        ...currencySettings,
+        exchangeRate: num,
+        lastUpdated: Date.now()
+      });
+    }
   };
 
   const renderPlayerSection = (
@@ -595,20 +695,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Tab Navigation */}
         <div className="px-4 sm:px-5 pt-3 shrink-0 border-b border-border/60 bg-slate-950/30">
           <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)} className="w-full">
-            <TabsList className="grid grid-cols-4 w-full h-9 bg-slate-950 border border-border">
-              <TabsTrigger value="providers" className="text-xs gap-1.5">
+            <TabsList className="grid grid-cols-5 w-full h-9 bg-slate-950 border border-border">
+              <TabsTrigger value="providers" className="text-xs gap-1.5 px-1 sm:px-2">
                 <Cpu className="w-3.5 h-3.5 hidden sm:inline" />
                 <span>Провайдеры</span>
               </TabsTrigger>
-              <TabsTrigger value="players" className="text-xs gap-1.5">
+              <TabsTrigger value="players" className="text-xs gap-1.5 px-1 sm:px-2">
                 <User className="w-3.5 h-3.5 hidden sm:inline" />
                 <span>Персоны</span>
               </TabsTrigger>
-              <TabsTrigger value="tts" className="text-xs gap-1.5">
+              <TabsTrigger value="currency" className="text-xs gap-1.5 px-1 sm:px-2">
+                <Coins className="w-3.5 h-3.5 hidden sm:inline text-amber-400" />
+                <span>Валюта</span>
+              </TabsTrigger>
+              <TabsTrigger value="tts" className="text-xs gap-1.5 px-1 sm:px-2">
                 <Volume2 className="w-3.5 h-3.5 hidden sm:inline" />
                 <span>Озвучка</span>
               </TabsTrigger>
-              <TabsTrigger value="game" className="text-xs gap-1.5">
+              <TabsTrigger value="game" className="text-xs gap-1.5 px-1 sm:px-2">
                 <Sliders className="w-3.5 h-3.5 hidden sm:inline" />
                 <span>Движок</span>
               </TabsTrigger>
@@ -782,6 +886,167 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-4">
               {renderPlayerSection(whiteConfig, onUpdateWhiteConfig, true)}
               {renderPlayerSection(blackConfig, onUpdateBlackConfig, false)}
+            </div>
+          )}
+
+          {activeTab === 'currency' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-foreground font-semibold text-sm">
+                    <Coins className="w-4 h-4 text-amber-400" />
+                    <span>Валюта отображения и Курс обмена</span>
+                  </div>
+                  <Badge variant="cyan" className="font-mono text-xs">
+                    Базовый биллинг: USD ($)
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Выбор валюты */}
+                  <div className="space-y-1.5">
+                    <label className="text-slate-300 font-medium text-xs block">
+                      Валюта для цен и истории:
+                    </label>
+                    <CurrencyCombobox
+                      value={currencySettings.currency}
+                      onChange={handleCurrencyChange}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      В этой валюте отображается стоимость ходов и баланс сессии.
+                    </p>
+                  </div>
+
+                  {/* Курс к USD + Волшебная палочка */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <label className="text-slate-300 font-medium">
+                        Курс к Доллару (1 USD =):
+                      </label>
+                      {currencySettings.lastUpdated && (
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          обновлен: {new Date(currencySettings.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          type="number"
+                          step="0.0001"
+                          min="0.0001"
+                          value={manualRateInput}
+                          onChange={e => handleManualRateChange(e.target.value)}
+                          disabled={currencySettings.currency === 'USD'}
+                          className="bg-slate-900 font-mono pr-10 text-xs"
+                          placeholder="92.50"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground font-mono pointer-events-none">
+                          {CURRENCIES[currencySettings.currency]?.symbol || '$'}
+                        </span>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="neon"
+                        onClick={handleFetchRate}
+                        disabled={isFetchingRate || currencySettings.currency === 'USD'}
+                        title="Запросить актуальный курс из открытого API (Open Exchange Rates / ExchangeRate-API)"
+                        className="h-9 px-3 text-xs gap-1.5 shrink-0"
+                      >
+                        {isFetchingRate ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="w-3.5 h-3.5" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {isFetchingRate ? 'Загрузка...' : 'Курс API'}
+                        </span>
+                      </Button>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground">
+                      Можно ввести вручную или нажать волшебную палочку 🪄 для запроса курса из сети.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Сообщение о результате запроса курса */}
+                {rateFetchMsg && (
+                  <div
+                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                      rateFetchMsg.type === 'success'
+                        ? 'bg-emerald-950/40 border border-emerald-800/60 text-emerald-300'
+                        : 'bg-rose-950/40 border border-rose-800/60 text-rose-300'
+                    }`}
+                  >
+                    {rateFetchMsg.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{rateFetchMsg.text}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Интерактивный калькулятор и превью стоимости ходов */}
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-border space-y-3">
+                <div className="flex items-center gap-2 text-foreground font-semibold text-xs">
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  <span>Примерная стоимость ходов популярных моделей в {CURRENCIES[currencySettings.currency]?.name}:</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-border flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-foreground">DeepSeek R1 (Reasoning)</div>
+                      <div className="text-[10px] text-muted-foreground font-sans">~500 токенов рассуждений ($0.0011)</div>
+                    </div>
+                    <Badge variant="emerald" className="font-bold">
+                      {formatCost(0.0011, currencySettings.currency, currencySettings.exchangeRate)}
+                    </Badge>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-border flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-foreground">DeepSeek V3 (Chat)</div>
+                      <div className="text-[10px] text-muted-foreground font-sans">~300 токенов ($0.000084)</div>
+                    </div>
+                    <Badge variant="emerald" className="font-bold">
+                      {formatCost(0.000084, currencySettings.currency, currencySettings.exchangeRate)}
+                    </Badge>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-border flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-foreground">Claude 3.7 Sonnet</div>
+                      <div className="text-[10px] text-muted-foreground font-sans">~400 токенов CoT ($0.006)</div>
+                    </div>
+                    <Badge variant="emerald" className="font-bold">
+                      {formatCost(0.006, currencySettings.currency, currencySettings.exchangeRate)}
+                    </Badge>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-border flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-foreground">LM Studio (Локально)</div>
+                      <div className="text-[10px] text-muted-foreground font-sans">На вашем железе</div>
+                    </div>
+                    <Badge variant="cyan" className="font-bold">
+                      0.00 {CURRENCIES[currencySettings.currency]?.symbol} (Бесплатно)
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-900/50 border border-border/60 text-[11px] text-muted-foreground flex items-start gap-2">
+                  <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <span>
+                    Все расчеты внутри движка производятся строго в долларах США ($) по официальным тарифам OpenRouter и пересчитываются в выбранную валюту ({CURRENCIES[currencySettings.currency]?.symbol}) в реальном времени.
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 

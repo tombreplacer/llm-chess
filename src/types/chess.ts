@@ -66,6 +66,36 @@ export interface TtsConfig {
   volume: number;
 }
 
+export type CurrencyCode =
+  | 'USD'
+  | 'RUB'
+  | 'EUR'
+  | 'KZT'
+  | 'BYN'
+  | 'TRY'
+  | 'CNY'
+  | 'GBP'
+  | 'UAH'
+  | 'GEL'
+  | 'AED'
+  | 'JPY'
+  | 'THB'
+  | 'BRL'
+  | 'INR';
+
+export interface CurrencyInfo {
+  code: CurrencyCode;
+  name: string;
+  symbol: string;
+  defaultRate: number;
+}
+
+export interface CurrencySettings {
+  currency: CurrencyCode;
+  exchangeRate: number;
+  lastUpdated?: number;
+}
+
 export interface RetryLog {
   attempt: number;
   rawResponse: string;
@@ -90,6 +120,9 @@ export interface MoveThought {
   durationMs: number;
   tokenCount?: number;
   tokensPerSecond?: number;
+  costUsd?: number;
+  promptTokens?: number;
+  completionTokens?: number;
   retries: RetryLog[];
   timestamp: number;
   captured?: PieceSymbol;
@@ -125,6 +158,7 @@ export interface ActiveThinkingState {
   contentStream: string;
   tokenCount: number;
   tokensPerSecond: number;
+  costUsd?: number;
   isThinking: boolean; // while generating reasoning
   isStreaming: boolean; // while request is active
   startTime: number;

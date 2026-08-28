@@ -5,6 +5,9 @@ export interface TokenMetrics {
   totalTokens: number;
   tokensPerSecond: number;
   durationMs: number;
+  costUsd?: number;
+  promptTokens?: number;
+  completionTokens?: number;
 }
 
 export interface StreamCallbacks {
@@ -32,6 +35,9 @@ export interface StreamMoveResult {
   tokenCount?: number;
   tokensPerSecond?: number;
   durationMs?: number;
+  costUsd?: number;
+  promptTokens?: number;
+  completionTokens?: number;
 }
 
 export interface StreamMoveOptions {
@@ -39,6 +45,7 @@ export interface StreamMoveOptions {
   baseUrl?: string;
   apiKey?: string;
   modelId: string;
+  modelPricing?: { prompt?: string | number; completion?: string | number };
   systemPrompt: string;
   userPrompt: string;
   temperature?: number;
@@ -47,21 +54,48 @@ export interface StreamMoveOptions {
   abortSignal?: AbortSignal;
 }
 
+export const DEFAULT_MODEL_PRICING: Record<string, { prompt: number; completion: number }> = {
+  'deepseek/deepseek-v4-flash-latest': { prompt: 0.0000001, completion: 0.0000002 },
+  'deepseek-v4-flash-latest': { prompt: 0.0000001, completion: 0.0000002 },
+  'deepseek/deepseek-r1': { prompt: 0.00000055, completion: 0.00000219 },
+  'deepseek/deepseek-chat': { prompt: 0.00000014, completion: 0.00000028 },
+  'anthropic/claude-3.7-sonnet': { prompt: 0.000003, completion: 0.000015 },
+  'anthropic/claude-3.5-sonnet': { prompt: 0.000003, completion: 0.000015 },
+  'openai/gpt-4o': { prompt: 0.0000025, completion: 0.00001 },
+  'openai/gpt-4o-mini': { prompt: 0.00000015, completion: 0.0000006 },
+  'google/gemini-2.0-flash-001': { prompt: 0.0000001, completion: 0.0000004 },
+  'google/gemini-2.0-pro-exp-02-05:free': { prompt: 0, completion: 0 },
+  'meta-llama/llama-3.3-70b-instruct': { prompt: 0.00000012, completion: 0.0000003 },
+  'qwen/qwq-32b': { prompt: 0.00000015, completion: 0.0000006 },
+  'qwen/qwen-2.5-72b-instruct': { prompt: 0.00000035, completion: 0.0000004 },
+  'mistralai/mistral-large-2411': { prompt: 0.000002, completion: 0.000006 },
+  'meta-llama/llama-3.2-3b-instruct:free': { prompt: 0, completion: 0 }
+};
+
 export const POPULAR_OPENROUTER_MODELS: OpenRouterModel[] = [
-  { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (Deep Thinking)', description: 'Топовая reasoning-модель с глубоким расчетом ходов' },
-  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3 (Chat)', description: 'Быстрая, мощная и экономичная модель' },
-  { id: 'anthropic/claude-3.7-sonnet', name: 'Claude 3.7 Sonnet', description: 'Флагман Anthropic с гибридным мышлением' },
-  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Выдающийся интеллект и гроссмейстерская точность' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o (OpenAI)', description: 'Флагманская мультимодальная модель OpenAI' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', description: 'Очень быстрая и дешевая модель для блица' },
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', description: 'Сверхбыстрая модель нового поколения от Google' },
-  { id: 'google/gemini-2.0-pro-exp-02-05:free', name: 'Gemini 2.0 Pro (Free)', description: 'Экспериментальная мощная модель (бесплатно)' },
-  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B Instruct', description: 'Открытая модель мирового уровня' },
-  { id: 'qwen/qwq-32b', name: 'QwQ 32B (Qwen Reasoning)', description: 'Специализированная модель для сложного анализа' },
-  { id: 'qwen/qwen-2.5-72b-instruct', name: 'Qwen 2.5 72B Instruct', description: 'Мощнейшая модель от Alibaba Cloud' },
-  { id: 'mistralai/mistral-large-2411', name: 'Mistral Large 2411', description: 'Флагманская европейская модель Mistral AI' },
-  { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B (Free)', description: 'Легкая бесплатная модель для тестов' }
+  { id: 'deepseek/deepseek-v4-flash-latest', name: 'DeepSeek V4 Flash (Latest)', description: 'Новейшая сверхбыстрая модель DeepSeek V4 Flash', pricing: { prompt: '0.0000001', completion: '0.0000002' } },
+  { id: 'deepseek-v4-flash-latest', name: 'DeepSeek V4 Flash Latest', description: 'Сверхбыстрая оптимизированная модель DeepSeek V4 Flash', pricing: { prompt: '0.0000001', completion: '0.0000002' } },
+  { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (Deep Thinking)', description: 'Топовая reasoning-модель с глубоким расчетом ходов', pricing: { prompt: '0.00000055', completion: '0.00000219' } },
+  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3 (Chat)', description: 'Быстрая, мощная и экономичная модель', pricing: { prompt: '0.00000014', completion: '0.00000028' } },
+  { id: 'anthropic/claude-3.7-sonnet', name: 'Claude 3.7 Sonnet', description: 'Флагман Anthropic с гибридным мышлением', pricing: { prompt: '0.000003', completion: '0.000015' } },
+  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Выдающийся интеллект и гроссмейстерская точность', pricing: { prompt: '0.000003', completion: '0.000015' } },
+  { id: 'openai/gpt-4o', name: 'GPT-4o (OpenAI)', description: 'Флагманская мультимодальная модель OpenAI', pricing: { prompt: '0.0000025', completion: '0.00001' } },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', description: 'Очень быстрая и дешевая модель для блица', pricing: { prompt: '0.00000015', completion: '0.0000006' } },
+  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', description: 'Сверхбыстрая модель нового поколения от Google', pricing: { prompt: '0.0000001', completion: '0.0000004' } },
+  { id: 'google/gemini-2.0-pro-exp-02-05:free', name: 'Gemini 2.0 Pro (Free)', description: 'Экспериментальная мощная модель (бесплатно)', pricing: { prompt: '0', completion: '0' } },
+  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B Instruct', description: 'Открытая модель мирового уровня', pricing: { prompt: '0.00000012', completion: '0.0000003' } },
+  { id: 'qwen/qwq-32b', name: 'QwQ 32B (Qwen Reasoning)', description: 'Специализированная модель для сложного анализа', pricing: { prompt: '0.00000015', completion: '0.0000006' } },
+  { id: 'qwen/qwen-2.5-72b-instruct', name: 'Qwen 2.5 72B Instruct', description: 'Мощнейшая модель от Alibaba Cloud', pricing: { prompt: '0.00000035', completion: '0.0000004' } },
+  { id: 'mistralai/mistral-large-2411', name: 'Mistral Large 2411', description: 'Флагманская европейская модель Mistral AI', pricing: { prompt: '0.000002', completion: '0.000006' } },
+  { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B (Free)', description: 'Легкая бесплатная модель для тестов', pricing: { prompt: '0', completion: '0' } }
 ];
+
+export function getRefererUrl(): string {
+  if (typeof window !== 'undefined' && window.location) {
+    return window.location.href || window.location.origin || 'http://localhost:5173/';
+  }
+  return 'http://localhost:5173/';
+}
 
 export class LMStudioClient {
   private defaultBaseUrl = 'http://localhost:1234/v1';
@@ -94,18 +128,14 @@ export class LMStudioClient {
 
   public async fetchOpenRouterModels(apiKey?: string): Promise<OpenRouterModel[]> {
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://llm-chess-arena.local',
-        'X-Title': 'LLM Chess Arena'
-      };
+      const headers: Record<string, string> = {};
       if (apiKey && apiKey.trim()) {
         headers['Authorization'] = `Bearer ${apiKey.trim()}`;
       }
 
       const response = await fetch('https://openrouter.ai/api/v1/models', {
         method: 'GET',
-        headers
+        headers: Object.keys(headers).length > 0 ? headers : undefined
       });
 
       if (!response.ok) {
@@ -114,13 +144,18 @@ export class LMStudioClient {
 
       const data = await response.json();
       if (data && Array.isArray(data.data)) {
-        return data.data.map((m: { id: string; name?: string; description?: string; context_length?: number; pricing?: { prompt?: string; completion?: string } }) => ({
+        const fetchedList: OpenRouterModel[] = data.data.map((m: { id: string; name?: string; description?: string; context_length?: number; pricing?: { prompt?: string; completion?: string } }) => ({
           id: m.id,
           name: m.name || m.id,
           description: m.description || '',
           context_length: m.context_length,
           pricing: m.pricing
         }));
+
+        // Объединяем с популярными пресетами, чтобы они были в начале списка
+        const popularIds = new Set(POPULAR_OPENROUTER_MODELS.map(p => p.id));
+        const customFetched = fetchedList.filter(m => !popularIds.has(m.id));
+        return [...POPULAR_OPENROUTER_MODELS, ...customFetched];
       }
       return POPULAR_OPENROUTER_MODELS;
     } catch (err: unknown) {
@@ -137,17 +172,18 @@ export class LMStudioClient {
       baseUrl = this.defaultBaseUrl,
       apiKey,
       modelId,
+      modelPricing,
       systemPrompt,
       userPrompt,
-      temperature = 0.5,
-      maxTokens = 2048,
+      temperature = 0.6,
+      maxTokens = -1,
       callbacks,
       abortSignal
     } = options;
 
     const isLocal = provider === 'lmstudio';
-    const cleanUrl = baseUrl.replace(/\/+$/, '');
-    const endpoint = isLocal ? `${cleanUrl}/chat/completions` : 'https://openrouter.ai/api/v1/chat/completions';
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    const endpoint = isLocal ? `${cleanBaseUrl}/chat/completions` : 'https://openrouter.ai/api/v1/chat/completions';
 
     if (!isLocal && (!apiKey || !apiKey.trim())) {
       throw new Error('Для игры через OpenRouter укажите ваш API-ключ в окне Настроек (⚙️ -> вкладка OpenRouter).');
@@ -165,7 +201,7 @@ export class LMStudioClient {
 
     if (!isLocal) {
       headers['Authorization'] = `Bearer ${apiKey?.trim() || ''}`;
-      headers['HTTP-Referer'] = 'https://llm-chess-arena.local';
+      headers['HTTP-Referer'] = getRefererUrl();
       headers['X-Title'] = 'LLM Chess Arena';
     }
 
@@ -236,20 +272,41 @@ export class LMStudioClient {
 
     const streamStartTime = Date.now();
     let tokenChunksCount = 0;
-    let explicitTokensCount: number | null = null;
+    let explicitPromptTokens: number | null = null;
+    let explicitCompletionTokens: number | null = null;
+    let explicitCostUsd: number | null = null;
+
+    const estimatedPromptTokens = Math.max(150, Math.round((systemPrompt.length + userPrompt.length) / 3.2));
+    
+    const pricingFallback = DEFAULT_MODEL_PRICING[modelId] || { prompt: 0, completion: 0 };
+    const pricePrompt = Number(modelPricing?.prompt ?? pricingFallback.prompt ?? 0);
+    const priceCompletion = Number(modelPricing?.completion ?? pricingFallback.completion ?? 0);
+
+    const calculateCurrentCost = (promptTok: number, compTok: number) => {
+      if (isLocal) return 0;
+      if (explicitCostUsd !== null) return explicitCostUsd;
+      return (promptTok * pricePrompt) + (compTok * priceCompletion);
+    };
 
     const emitTokenMetrics = () => {
       const durationMs = Date.now() - streamStartTime;
       const durationSec = durationMs / 1000;
-      const currentTokens =
-        explicitTokensCount !== null
-          ? explicitTokensCount
+      const currentPromptTokens = explicitPromptTokens ?? estimatedPromptTokens;
+      const currentCompletionTokens =
+        explicitCompletionTokens !== null
+          ? explicitCompletionTokens
           : Math.max(tokenChunksCount, Math.round(rawResponse.length / 2.8));
-      const speed = durationSec > 0.05 ? +(currentTokens / durationSec).toFixed(1) : 0;
+      
+      const speed = durationSec > 0.05 ? +(currentCompletionTokens / durationSec).toFixed(1) : 0;
+      const currentCostUsd = calculateCurrentCost(currentPromptTokens, currentCompletionTokens);
+
       callbacks.onTokenMetrics?.({
-        totalTokens: currentTokens,
+        totalTokens: currentCompletionTokens,
         tokensPerSecond: speed,
-        durationMs
+        durationMs,
+        costUsd: currentCostUsd,
+        promptTokens: currentPromptTokens,
+        completionTokens: currentCompletionTokens
       });
     };
 
@@ -279,9 +336,16 @@ export class LMStudioClient {
             try {
               const parsed = JSON.parse(jsonStr);
 
-              // Точный подсчет токенов из usage (если предоставлен провайдером)
-              if (parsed.usage?.completion_tokens) {
-                explicitTokensCount = parsed.usage.completion_tokens;
+              if (parsed.usage) {
+                if (typeof parsed.usage.prompt_tokens === 'number') {
+                  explicitPromptTokens = parsed.usage.prompt_tokens;
+                }
+                if (typeof parsed.usage.completion_tokens === 'number') {
+                  explicitCompletionTokens = parsed.usage.completion_tokens;
+                }
+                if (typeof parsed.usage.cost === 'number') {
+                  explicitCostUsd = parsed.usage.cost;
+                }
                 emitTokenMetrics();
               }
 
@@ -290,7 +354,6 @@ export class LMStudioClient {
 
               const delta = choice.delta || {};
               
-              // 1. Нативный reasoning_content (DeepSeek R1 / Gemma QAT / QwQ)
               const reasoningChunk = delta.reasoning_content || delta.reasoning || '';
               if (reasoningChunk) {
                 fullThinking += reasoningChunk;
@@ -301,7 +364,6 @@ export class LMStudioClient {
                 continue;
               }
 
-              // 2. Обычный контент
               const contentChunk = delta.content || '';
               if (contentChunk) {
                 rawResponse += contentChunk;
@@ -309,13 +371,11 @@ export class LMStudioClient {
                 emitTokenMetrics();
                 let chunkText = contentChunk;
 
-                // Проверяем начало <think> или <thought>
                 if (!isInsideThinkTag && (chunkText.includes('<think>') || chunkText.includes('<thought>'))) {
                   isInsideThinkTag = true;
                   chunkText = chunkText.replace(/<think>|<thought>/g, '');
                 }
 
-                // Проверяем конец </think> или </thought>
                 if (isInsideThinkTag && (chunkText.includes('</think>') || chunkText.includes('</thought>'))) {
                   const parts = chunkText.split(/<\/think>|<\/thought>/);
                   const thinkPart = parts[0];
@@ -364,19 +424,24 @@ export class LMStudioClient {
     }
 
     const finalDurationMs = Date.now() - streamStartTime;
-    const finalTokens =
-      explicitTokensCount !== null
-        ? explicitTokensCount
+    const finalPromptTokens = explicitPromptTokens ?? estimatedPromptTokens;
+    const finalCompletionTokens =
+      explicitCompletionTokens !== null
+        ? explicitCompletionTokens
         : Math.max(tokenChunksCount, Math.round(rawResponse.length / 2.8));
-    const finalSpeed = finalDurationMs > 50 ? +((finalTokens / (finalDurationMs / 1000)).toFixed(1)) : 0;
+    const finalSpeed = finalDurationMs > 50 ? +((finalCompletionTokens / (finalDurationMs / 1000)).toFixed(1)) : 0;
+    const finalCostUsd = calculateCurrentCost(finalPromptTokens, finalCompletionTokens);
 
     return {
       fullThinking,
       fullContent,
       rawResponse,
-      tokenCount: finalTokens,
+      tokenCount: finalCompletionTokens,
       tokensPerSecond: finalSpeed,
-      durationMs: finalDurationMs
+      durationMs: finalDurationMs,
+      costUsd: finalCostUsd,
+      promptTokens: finalPromptTokens,
+      completionTokens: finalCompletionTokens
     };
   }
 
@@ -616,7 +681,7 @@ export class LMStudioClient {
         throw new Error('Для генерации речи через OpenRouter требуется API-ключ.');
       }
       headers['Authorization'] = `Bearer ${apiKey.trim()}`;
-      headers['HTTP-Referer'] = window.location.origin || 'https://llm-chess-arena.local';
+      headers['HTTP-Referer'] = getRefererUrl();
       headers['X-Title'] = 'LLM Chess Arena';
     }
 
